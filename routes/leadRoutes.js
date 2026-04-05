@@ -1,0 +1,26 @@
+const express = require('express');
+const {
+  getLeads,
+  getLeadById,
+  updateLeadStatus,
+  updateLeadScoring,
+  getHistory,
+  getAdminStats
+} = require('../controllers/leadController');
+const { leadStatusSchema } = require('../validators/leadValidator');
+const { validate } = require('../middleware/validation');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { adminLimiter } = require('../middleware/rateLimiters');
+
+const router = express.Router();
+
+router.use(requireAuth);
+
+router.get('/history', getHistory);
+router.get('/admin/stats', requireAdmin, adminLimiter, getAdminStats);
+router.get('/', getLeads);
+router.get('/:id', getLeadById);
+router.patch('/:id', validate(leadStatusSchema), updateLeadStatus);
+router.post('/:id/score', updateLeadScoring);
+
+module.exports = router;
