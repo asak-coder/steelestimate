@@ -3,10 +3,23 @@ const mongoSanitize = require('express-mongo-sanitize');
 const xssClean = require('xss-clean');
 const cors = require('cors');
 
-const allowedOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+function normalizeOrigin(origin) {
+  return String(origin || '').trim().replace(/\/$/, '');
+}
+
+function parseOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map(normalizeOrigin)
+    .filter(Boolean);
+}
+
+const defaultCorsOrigins = ['https://steelestimate.vercel.app'];
+const envOrigins = parseOrigins(
+  process.env.CORS_ORIGIN || process.env.FRONTEND_URL || process.env.ADMIN_FRONTEND_URL || ''
+);
+
+const corsOrigins = [...new Set([...defaultCorsOrigins, ...envOrigins].map(normalizeOrigin))];
 
 const corsOptions = {
   origin(origin, callback) {
@@ -14,15 +27,12 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (allowedOrigins.length === 0) {
-      return callback(new Error('CORS origin not configured'), false);
-    }
-
-    if (allowedOrigins.includes(origin)) {
+    const requestOrigin = normalizeOrigin(origin);
+    if (corsOrigins.includes(requestOrigin)) {
       return callback(null, true);
     }
 
-    return callback(new Error('Not allowed by CORS'), false);
+    return callback(new Error(`Not allowed by CORS: ${requestOrigin}`), false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
@@ -39,5 +49,7 @@ const securityMiddleware = [
 module.exports = {
   securityMiddleware,
   corsOptions,
-  allowedOrigins
+  allowedOrigins: corsOrigins,
+  normalizeOrigin,
+  parseOrigins
 };
