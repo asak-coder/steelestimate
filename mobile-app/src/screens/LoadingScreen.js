@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import FullScreenLoader from '../components/FullScreenLoader';
 
 const STEPS = ['Analyzing structure...', 'Calculating loads...', 'Optimizing design...', 'Generating drawing...'];
 
@@ -48,17 +49,14 @@ const LoadingScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />
-        <Text style={styles.title}>{STEPS[stepIndex]}</Text>
-        <Text style={styles.subtitle}>Please wait while the analysis pipeline prepares your estimate.</Text>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${((stepIndex + 1) / STEPS.length) * 100}%` }]} />
-        </View>
-        <Text style={styles.stepCounter}>
-          Step {stepIndex + 1} of {STEPS.length}
-        </Text>
-      </View>
+      <FullScreenLoader
+        title={STEPS[stepIndex]}
+        subtitle="Please wait while the analysis pipeline prepares your estimate."
+        message="The estimate is being generated in the background."
+        progress={((stepIndex + 1) / STEPS.length) * 100}
+        progressLabel={`Step ${stepIndex + 1} of ${STEPS.length}`}
+      />
+      <Animated.View style={[styles.hiddenSpinner, { transform: [{ rotate }] }]} />
     </View>
   );
 };
@@ -66,61 +64,11 @@ const LoadingScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B1220',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24
+    backgroundColor: '#0B1220'
   },
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#111A2E',
-    borderRadius: 24,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: '#24324A',
-    alignItems: 'center'
-  },
-  spinner: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 8,
-    borderColor: '#2A3A56',
-    borderTopColor: '#4DA3FF',
-    marginBottom: 20
-  },
-  title: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 10
-  },
-  subtitle: {
-    color: '#B7C4D9',
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 24
-  },
-  progressTrack: {
-    width: '100%',
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#1A2740',
-    overflow: 'hidden',
-    marginBottom: 10
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#4DA3FF'
-  },
-  stepCounter: {
-    color: '#7F93B0',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8
+  hiddenSpinner: {
+    position: 'absolute',
+    opacity: 0
   }
 });
 

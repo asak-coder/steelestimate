@@ -13,6 +13,9 @@ const authRoutes = require('./routes/authRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const apiKeyRoutes = require('./routes/apiKeyRoutes');
+const v1EstimateRoutes = require('./routes/v1/estimateRoutes');
+const v1LeadRoutes = require('./routes/v1/leadRoutes');
+const v1AuthRoutes = require('./routes/v1/authRoutes');
 
 const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'CORS_ORIGIN'];
 
@@ -65,8 +68,14 @@ function createApp() {
 
   app.use('/api/peb', pebRoutes);
   app.use('/api/payments', paymentRoutes);
+
   app.use('/api/auth', authRoutes);
   app.use('/api/leads', leadRoutes);
+
+  app.use('/api/v1/auth', v1AuthRoutes);
+  app.use('/api/v1/leads', v1LeadRoutes);
+  app.use('/api/v1/estimates', v1EstimateRoutes);
+
   app.use('/api/admin', adminRoutes);
   app.use('/api/api-keys', apiKeyRoutes);
 

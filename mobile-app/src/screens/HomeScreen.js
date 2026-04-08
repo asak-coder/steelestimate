@@ -1,166 +1,197 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+const React = require('react');
+const { View, Text, TouchableOpacity, StyleSheet, ScrollView } = require('react-native');
+const ScreenContainer = require('../components/ScreenContainer');
+const { APP_THEME } = require('../theme/appTheme');
 
-const HomeScreen = ({ navigation, onLogout }) => {
+function HomeScreen({ navigation }) {
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.hero}>
-        <Text style={styles.kicker}>Industrial estimation platform</Text>
-        <Text style={styles.title}>Fast PEB quotes with engineering-backed outputs</Text>
-        <Text style={styles.description}>
-          Enter project dimensions, capture lead details, and generate a structured estimate with BOQ, steel metrics, and drawing preview.
-        </Text>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>4</Text>
-            <Text style={styles.statLabel}>Design codes</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>1</Text>
-            <Text style={styles.statLabel}>Unified flow</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>PDF</Text>
-            <Text style={styles.statLabel}>Quotation export</Text>
-          </View>
+    <ScreenContainer style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.heroCard}>
+          <Text style={styles.kicker}>Industrial Steel Estimation</Text>
+          <Text style={styles.title}>Steel Estimator</Text>
+          <Text style={styles.subtitle}>
+            Estimate steel, generate leads, and save projects offline with a clean industrial workflow.
+          </Text>
         </View>
 
-        <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('EstimateInput')}>
-          <Text style={styles.primaryButtonText}>Start Estimate</Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('AdminDashboard')}>
-          <Text style={styles.secondaryButtonText}>Admin Dashboard</Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={onLogout}>
-          <Text style={styles.secondaryButtonText}>Logout</Text>
-        </Pressable>
-      </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>What you get</Text>
-        <View style={styles.featureCard}>
-          <Text style={styles.featureTitle}>Project Summary</Text>
-          <Text style={styles.featureText}>Area, steel weight, and a concise project overview.</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate('SteelCalculatorScreen')}
+            activeOpacity={0.86}
+          >
+            <Text style={styles.primaryButtonText}>Steel Weight Calculator</Text>
+            <Text style={styles.buttonMeta}>Calculate weights, columns, and tonnage</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.navigate('PEBEstimatorScreen')}
+            activeOpacity={0.86}
+          >
+            <Text style={styles.secondaryButtonText}>PEB Estimator</Text>
+            <Text style={styles.buttonMeta}>Plan industrial buildings and estimates</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.ghostButton}
+            onPress={() => navigation.navigate('SavedProjectsScreen')}
+            activeOpacity={0.86}
+          >
+            <Text style={styles.ghostButtonText}>Saved Projects</Text>
+            <Text style={styles.buttonMeta}>View offline saved calculations</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.featureCard}>
-          <Text style={styles.featureTitle}>Design Output</Text>
-          <Text style={styles.featureText}>Cost, optimized pricing, and engineering notes.</Text>
+
+        <View style={styles.infoGrid}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoValue}>Offline</Text>
+            <Text style={styles.infoLabel}>Save estimates when network is unavailable</Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoValue}>Fast</Text>
+            <Text style={styles.infoLabel}>Streamlined inputs for site and office use</Text>
+          </View>
         </View>
-        <View style={styles.featureCard}>
-          <Text style={styles.featureTitle}>BOQ & Drawing</Text>
-          <Text style={styles.featureText}>Bill of quantities and SVG drawing preview.</Text>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </ScreenContainer>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#EEF3F8',
-    padding: 20,
-    paddingBottom: 32
+    backgroundColor: APP_THEME.colors.background,
   },
-  hero: {
-    backgroundColor: '#111A2E',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 20
+  content: {
+    padding: APP_THEME.spacing.lg,
+    paddingBottom: APP_THEME.spacing.xxl,
+  },
+  heroCard: {
+    backgroundColor: APP_THEME.colors.surface,
+    borderRadius: APP_THEME.radius.xl,
+    padding: APP_THEME.spacing.xl,
+    marginBottom: APP_THEME.spacing.lg,
+    borderWidth: 1,
+    borderColor: APP_THEME.colors.border,
+    shadowColor: APP_THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 5,
   },
   kicker: {
-    color: '#81A8DF',
+    color: APP_THEME.colors.accent,
+    fontSize: APP_THEME.typography.caption,
+    fontWeight: '800',
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
-    letterSpacing: 1.6,
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 10
+    marginBottom: APP_THEME.spacing.xs,
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 30,
+    fontSize: APP_THEME.typography.title,
+    fontWeight: '800',
+    color: APP_THEME.colors.primary,
+    marginBottom: APP_THEME.spacing.sm,
     lineHeight: 38,
+  },
+  subtitle: {
+    fontSize: APP_THEME.typography.body,
+    color: APP_THEME.colors.textMuted,
+    lineHeight: 24,
+  },
+  section: {
+    marginBottom: APP_THEME.spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: APP_THEME.typography.sectionTitle,
     fontWeight: '800',
-    marginBottom: 12
-  },
-  description: {
-    color: '#C6D0DF',
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 22
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 22
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#18233A',
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center'
-  },
-  statValue: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 4
-  },
-  statLabel: {
-    color: '#AEBBD0',
-    fontSize: 12
+    color: APP_THEME.colors.text,
+    marginBottom: APP_THEME.spacing.md,
   },
   primaryButton: {
-    backgroundColor: '#4DA3FF',
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginBottom: 10
+    backgroundColor: APP_THEME.colors.primary,
+    borderRadius: APP_THEME.radius.lg,
+    paddingVertical: APP_THEME.spacing.lg,
+    paddingHorizontal: APP_THEME.spacing.lg,
+    marginBottom: APP_THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: APP_THEME.colors.primary,
+    shadowColor: APP_THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  secondaryButton: {
+    backgroundColor: APP_THEME.colors.accent,
+    borderRadius: APP_THEME.radius.lg,
+    paddingVertical: APP_THEME.spacing.lg,
+    paddingHorizontal: APP_THEME.spacing.lg,
+    marginBottom: APP_THEME.spacing.md,
+    shadowColor: APP_THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  ghostButton: {
+    backgroundColor: APP_THEME.colors.surface,
+    borderRadius: APP_THEME.radius.lg,
+    paddingVertical: APP_THEME.spacing.lg,
+    paddingHorizontal: APP_THEME.spacing.lg,
+    borderWidth: 1,
+    borderColor: APP_THEME.colors.border,
   },
   primaryButtonText: {
     color: '#FFFFFF',
+    fontSize: 17,
     fontWeight: '800',
-    fontSize: 16
-  },
-  secondaryButton: {
-    backgroundColor: '#18233A',
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center'
+    marginBottom: APP_THEME.spacing.xs,
   },
   secondaryButtonText: {
     color: '#FFFFFF',
+    fontSize: 17,
     fontWeight: '800',
-    fontSize: 16
+    marginBottom: APP_THEME.spacing.xs,
   },
-  section: {
-    gap: 12
+  ghostButtonText: {
+    color: APP_THEME.colors.primary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: APP_THEME.spacing.xs,
   },
-  sectionTitle: {
-    color: '#1B2A41',
+  buttonMeta: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: APP_THEME.typography.caption,
+    lineHeight: 18,
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    gap: APP_THEME.spacing.md,
+  },
+  infoCard: {
+    flex: 1,
+    backgroundColor: APP_THEME.colors.surface,
+    borderRadius: APP_THEME.radius.lg,
+    padding: APP_THEME.spacing.lg,
+    borderWidth: 1,
+    borderColor: APP_THEME.colors.border,
+  },
+  infoValue: {
+    color: APP_THEME.colors.primary,
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: 4
+    marginBottom: APP_THEME.spacing.xs,
   },
-  featureCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#D8E1EB'
+  infoLabel: {
+    color: APP_THEME.colors.textMuted,
+    fontSize: APP_THEME.typography.caption,
+    lineHeight: 18,
   },
-  featureTitle: {
-    color: '#122033',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 6
-  },
-  featureText: {
-    color: '#5D6C80',
-    fontSize: 14,
-    lineHeight: 20
-  }
 });
 
-export default HomeScreen;
+module.exports = HomeScreen;
+module.exports.default = HomeScreen;

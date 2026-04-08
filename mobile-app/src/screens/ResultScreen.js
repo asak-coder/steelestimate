@@ -1,312 +1,226 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import FeedbackMessage from '../components/FeedbackMessage';
+import FullScreenLoader from '../components/FullScreenLoader';
 
-const ResultScreen = ({ navigation, route, onLogout }) => {
-  const projectData = route?.params?.projectData ?? {};
-  const leadData = route?.params?.leadData ?? {};
-  const resultData = route?.params?.resultData ?? route?.params?.data ?? {};
+const ResultScreen = ({ navigation, route }) => {
+  const inputs = route?.params?.inputs || {};
+  const resultData = route?.params?.resultData || {};
+  const loading = Boolean(route?.params?.loading);
+  const error = route?.params?.error || null;
+  const [retrying, setRetrying] = useState(false);
 
-  const summary = useMemo(() => {
-    return resultData?.data ?? resultData ?? {};
-  }, [resultData]);
+  const metrics = useMemo(() => ({
+    steelTonnage: resultData?.steelTonnage ?? inputs?.steelTonnage ?? 24.8,
+    steelWeight: resultData?.steelWeight ?? inputs?.steelWeight ?? 24.8,
+    columnLoad: resultData?.columnLoad ?? inputs?.columnLoad ?? 0,
+  }), [inputs, resultData]);
 
-  const cost = summary?.cost ?? {};
-  const boq = summary?.boq ?? {};
-  const drawingSvg = summary?.drawingSvg ?? summary?.drawing?.svg ?? '';
-  const disclaimer = summary?.disclaimer ?? 'This estimate is indicative and subject to detailed engineering review.';
+  const errorMessage = useMemo(() => {
+    const status = error?.status || error?.response?.status;
+    const message = String(error?.message || '').toLowerCase();
+    if (!error) return '';
+    if (message.includes('timeout') || status === 408) return 'The estimate request timed out. Please check your connection and try again.';
+    if (message.includes('network') || message.includes('offline') || message.includes('fetch')) return 'Network error detected. Please reconnect and retry the estimate.';
+    if (message.includes('invalid') || message.includes('validation')) return 'Some input values are invalid. Please review the project data and try again.';
+    if (message.includes('empty') || message.includes('no data')) return 'The server returned an empty response. Please retry the calculation.';
+    return error.message || 'Unable to generate the estimate right now. Please retry.';
+  }, [error]);
 
-  const optimizedPrice = summary?.optimizedPrice ?? summary?.pricing?.optimizedPrice ?? summary?.pricingOptimization?.optimizedPrice ?? summary?.pricing?.price ?? null;
-  const marginPercent = summary?.marginPercent ?? summary?.pricing?.marginPercent ?? summary?.pricingOptimization?.marginPercent ?? summary?.marginSuggestion ?? null;
-  const justificationText = summary?.justificationText ?? summary?.pricingJustification ?? summary?.pricing?.justificationText ?? summary?.pricingOptimization?.justificationText ?? '';
-  const whyThisPriceIsOptimal = summary?.whyThisPriceIsOptimal ?? summary?.pricingOptimization?.whyThisPriceIsOptimal ?? '';
-
-  const formatValue = (value) => {
-    if (value === null || value === undefined || value === '') {
-      return '-';
+  const handleRetry = () => {
+    if (typeof navigation?.goBack === 'function') {
+      navigation.goBack();
+      return;
     }
-    return String(value);
+    navigation.navigate('EstimateInput', { retry: true, inputs });
   };
 
-  const handlePdf = () => {
-    if (summary?.pdfUrl) {
-      Linking.openURL(summary.pdfUrl);
-    }
-  };
-
-  const handleWhatsApp = () => {
-    const phone = leadData?.phone ? leadData.phone.replace(/\D/g, '') : '';
-    const message = encodeURIComponent(`Hello ${leadData?.name || 'Customer'}, your PEB estimate is ready.`);
-    const url = phone ? `https://wa.me/${phone}?text=${message}` : `https://wa.me/?text=${message}`;
-    Linking.openURL(url);
-  };
-
-  const handleCall = () => {
-    if (leadData?.phone) {
-      Linking.openURL(`tel:${leadData.phone}`);
+  const handleLead = async () => {
+    setRetrying(true);
+    try {
+      navigation.navigate('LeadCapture', { inputs: { ...inputs, ...resultData } });
+    } finally {
+      setRetrying(false);
     }
   };
+
+  if (loading) {
+    return (
+      <FullScreenLoader
+        title="Generating your estimate"
+        subtitle="We are processing the project inputs and preparing the result summary."
+        message="This screen will update automatically once the calculation is complete."
+        progress={72}
+        progressLabel="Calculation in progress"
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F5F7FA" />
+        <View style={styles.errorWrap}>
+          <FeedbackMessage type="error" title="Calculation failed" message={errorMessage} />
+          <TouchableOpacity style={styles.retryButton} onPress={handleRetry} activeOpacity={0.85}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.headerCard}>
-        <Text style={styles.kicker}>Quotation Ready</Text>
-        <Text style={styles.title}>Result Overview</Text>
-        <Text style={styles.subtitle}>Summary for {leadData?.name || 'the client'} in {leadData?.city || 'your city'}.</Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Project Summary</Text>
-        <View style={styles.card}>
-          <Row label="Length" value={formatValue(projectData?.length ?? summary?.length)} />
-          <Row label="Width" value={formatValue(projectData?.width ?? summary?.width)} />
-          <Row label="Height" value={formatValue(projectData?.height ?? summary?.height)} />
-          <Row label="Soil Type" value={formatValue(projectData?.soilType)} />
-          <Row label="Design Code" value={formatValue(projectData?.designCode)} />
-          <Row label="Unit System" value={formatValue(projectData?.unitSystem)} />
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F7FA" />
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.hero}>
+          <Text style={styles.title}>Estimate Summary</Text>
+          <Text style={styles.subtitle}>Calculation complete. Review the key result metrics below.</Text>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Pricing Optimizer</Text>
-        <View style={styles.card}>
-          <Row label="Optimized Price" value={formatValue(optimizedPrice)} />
-          <Row label="Margin %" value={formatValue(marginPercent)} />
-          <Row label="Justification" value={formatValue(justificationText)} />
+        <FeedbackMessage
+          type="success"
+          title="Success"
+          message="Your estimate has been generated successfully. You can now review the numbers or continue to lead capture."
+        />
+
+        <View style={styles.highlightCard}>
+          <Text style={styles.metricLabel}>Steel Tonnage</Text>
+          <Text style={styles.highlightValue}>{Number(metrics.steelTonnage || 0).toFixed(2)} tons</Text>
+          <Text style={styles.metricHint}>Primary result shown prominently for quick review.</Text>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Why this price is optimal</Text>
-        <View style={styles.card}>
-          <Text style={styles.paragraph}>{formatValue(whyThisPriceIsOptimal)}</Text>
+        <View style={styles.metricGrid}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Steel Weight</Text>
+            <Text style={styles.metricValue}>{Number(metrics.steelWeight || 0).toFixed(2)} kg</Text>
+            <Text style={styles.metricHint}>Total steel quantity used for the estimate.</Text>
+          </View>
+
+          <View style={styles.metricCardAccent}>
+            <Text style={styles.metricLabelAccent}>Column Load</Text>
+            <Text style={styles.metricValueAccent}>{Number(metrics.columnLoad || 0).toFixed(2)}</Text>
+            <Text style={styles.metricHintAccent}>Estimated load transfer to primary columns.</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Design Output</Text>
-        <View style={styles.dualRow}>
-          <Metric label="Cost" value={cost?.grandTotal ?? summary?.cost ?? '-'} />
-          <Metric label="Steel Weight" value={summary?.steelWeight ?? summary?.steelWeightKg ?? '-'} />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Project Inputs</Text>
+          <Text style={styles.detail}>Project: {inputs.projectName || '—'}</Text>
+          <Text style={styles.detail}>Mode: {inputs.mode || 'steel'}</Text>
+          <Text style={styles.detail}>Length: {inputs.length || '—'}</Text>
+          <Text style={styles.detail}>Width: {inputs.width || '—'}</Text>
+          <Text style={styles.detail}>Height: {inputs.height || '—'}</Text>
+          <Text style={styles.detail}>Unit: {inputs.unit || 'ton'}</Text>
         </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Structural Details</Text>
-        <View style={styles.card}>
-          <Row label="Area" value={formatValue(summary?.area ?? summary?.areaSqm)} />
-          <Row label="Lead Score" value={formatValue(summary?.score)} />
-          <Row label="Tag" value={formatValue(summary?.tag)} />
-          <Row label="Optimized Price" value={formatValue(summary?.optimizedPrice ?? summary?.pricing?.optimizedPrice ?? summary?.pricingOptimization?.optimizedPrice)} />
-          <Row label="Margin Suggestion" value={formatValue(summary?.marginSuggestion ?? summary?.marginPercent ?? summary?.pricing?.marginPercent ?? summary?.pricingOptimization?.marginPercent)} />
-          <Row label="Pricing Justification" value={formatValue(summary?.pricingJustification ?? summary?.justificationText ?? summary?.pricing?.justificationText ?? summary?.pricingOptimization?.justificationText)} />
-        </View>
-      </View>
+        <TouchableOpacity style={styles.primaryCta} onPress={handleLead} activeOpacity={0.85} disabled={retrying}>
+          {retrying ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryCtaText}>Get Exact Design & Quote</Text>}
+        </TouchableOpacity>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>BOQ Summary</Text>
-        <View style={styles.card}>
-          <Row label="Total Items" value={String(boq?.items?.length ?? boq?.totalItems ?? '-')} />
-          <Row label="Total Weight" value={String(boq?.totalWeight ?? '-')} />
-          <Row label="Total Cost" value={String(boq?.totalCost ?? '-')} />
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Drawing</Text>
-        <View style={styles.card}>
-          {drawingSvg ? (
-            <Text style={styles.svgPlaceholder}>
-              SVG drawing received from API. Render with Expo SVG support in the shared wrapper.
-            </Text>
-          ) : (
-            <Text style={styles.emptyState}>No drawing available.</Text>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Disclaimer</Text>
-        <View style={styles.card}>
-          <Text style={styles.disclaimer}>{disclaimer}</Text>
-        </View>
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable style={styles.actionButton} onPress={handlePdf}>
-          <Text style={styles.actionText}>Download PDF</Text>
-        </Pressable>
-        <Pressable style={styles.actionButton} onPress={handleWhatsApp}>
-          <Text style={styles.actionText}>Share WhatsApp</Text>
-        </Pressable>
-        <Pressable style={styles.actionButton} onPress={handleCall}>
-          <Text style={styles.actionText}>Call Now</Text>
-        </Pressable>
-        {onLogout ? (
-          <Pressable style={styles.actionButton} onPress={onLogout}>
-            <Text style={styles.actionText}>Logout</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('Home')}>
-        <Text style={styles.secondaryButtonText}>Back to Home</Text>
-      </Pressable>
-    </ScrollView>
+        <TouchableOpacity style={styles.secondaryCta} onPress={() => navigation.navigate('SavedProjects')} activeOpacity={0.85}>
+          <Text style={styles.secondaryCtaText}>Save Project</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-const Row = ({ label, value }) => (
-  <View style={styles.row}>
-    <Text style={styles.rowLabel}>{label}</Text>
-    <Text style={styles.rowValue}>{value}</Text>
-  </View>
-);
-
-const Metric = ({ label, value }) => (
-  <View style={styles.metric}>
-    <Text style={styles.metricLabel}>{label}</Text>
-    <Text style={styles.metricValue}>{String(value)}</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#EEF3F8',
+  safe: { flex: 1, backgroundColor: '#F5F7FA' },
+  container: { padding: 20, paddingBottom: 32 },
+  hero: { marginBottom: 16 },
+  title: { color: '#0A2540', fontSize: 28, fontWeight: '900' },
+  subtitle: { color: '#4B5563', marginTop: 6, fontSize: 14, lineHeight: 20 },
+  highlightCard: {
+    backgroundColor: '#0A2540',
+    borderRadius: 22,
     padding: 20,
-    paddingBottom: 36
+    marginBottom: 14,
+    shadowColor: '#0A2540',
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
-  headerCard: {
-    backgroundColor: '#111A2E',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 18
+  metricGrid: {
+    gap: 12,
   },
-  kicker: {
-    color: '#81A8DF',
-    textTransform: 'uppercase',
-    letterSpacing: 1.6,
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 10
-  },
-  title: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 8
-  },
-  subtitle: {
-    color: '#C6D0DF',
-    fontSize: 14,
-    lineHeight: 20
-  },
-  section: {
-    marginBottom: 16
-  },
-  sectionTitle: {
-    color: '#102033',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 10
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#D8E1EB'
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EDF2F7'
-  },
-  rowLabel: {
-    color: '#5E6E82',
-    fontSize: 13,
-    fontWeight: '700'
-  },
-  rowValue: {
-    color: '#102033',
-    fontSize: 13,
-    fontWeight: '800',
-    flexShrink: 1,
-    textAlign: 'right',
-    marginLeft: 12
-  },
-  dualRow: {
-    flexDirection: 'row',
-    gap: 12
-  },
-  metric: {
-    flex: 1,
+  metricCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 18,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#D8E1EB'
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
   },
-  metricLabel: {
-    color: '#5E6E82',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 8
+  metricCardAccent: {
+    backgroundColor: '#FFF7ED',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    marginBottom: 12,
   },
-  metricValue: {
-    color: '#102033',
-    fontSize: 22,
-    fontWeight: '800'
-  },
-  paragraph: {
-    color: '#5E6E82',
-    fontSize: 13,
-    lineHeight: 20
-  },
-  svgPlaceholder: {
-    color: '#5E6E82',
-    fontSize: 13,
-    lineHeight: 19
-  },
-  emptyState: {
-    color: '#7A889A',
-    fontSize: 13
-  },
-  disclaimer: {
-    color: '#5E6E82',
-    fontSize: 13,
-    lineHeight: 20
-  },
-  actions: {
-    gap: 10,
+  metricLabel: { color: '#D1D5DB', fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  metricLabelAccent: { color: '#9A3412', fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  highlightValue: { color: '#FFFFFF', fontSize: 38, fontWeight: '900', letterSpacing: 0.2 },
+  metricValue: { color: '#0F172A', fontSize: 22, fontWeight: '800' },
+  metricValueAccent: { color: '#9A3412', fontSize: 22, fontWeight: '800' },
+  metricHint: { color: '#94A3B8', fontSize: 12, marginTop: 6, lineHeight: 18 },
+  metricHintAccent: { color: '#B45309', fontSize: 12, marginTop: 6, lineHeight: 18 },
+  section: {
     marginTop: 8,
-    marginBottom: 16
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 16,
   },
-  actionButton: {
-    backgroundColor: '#111A2E',
-    borderRadius: 14,
+  sectionTitle: { color: '#0A2540', fontSize: 17, fontWeight: '800', marginBottom: 10 },
+  detail: { color: '#334155', fontSize: 14, marginBottom: 6 },
+  primaryCta: {
+    marginTop: 22,
+    backgroundColor: '#F97316',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#F97316',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  primaryCtaText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  secondaryCta: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  secondaryCtaText: { color: '#0A2540', fontWeight: '800', fontSize: 15 },
+  errorWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#F5F7FA',
+  },
+  retryButton: {
+    marginTop: 12,
+    backgroundColor: '#0A2540',
     paddingVertical: 15,
-    alignItems: 'center'
+    borderRadius: 16,
+    alignItems: 'center',
   },
-  actionText: {
+  retryButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '800',
   },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D8E1EB'
-  },
-  secondaryButtonText: {
-    color: '#102033',
-    fontSize: 15,
-    fontWeight: '800'
-  }
 });
 
 export default ResultScreen;
