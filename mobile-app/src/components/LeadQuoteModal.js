@@ -1,88 +1,106 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+const React = require('react');
+const { Modal, Pressable, StyleSheet, Text, View } = require('react-native');
+const { COLORS, SPACING, RADIUS } = require('../theme/appTheme');
 
-const LeadQuoteModal = ({ visible, onYes, onNo }) => {
-  return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onNo}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Need detailed design & fabrication quote?</Text>
-          <Text style={styles.body}>Tap Yes to continue to the lead form or No to stay on the current screen.</Text>
+function LeadQuoteModal({ visible, onClose, onLeadPress, tonnage, title = 'High-value project detected' }) {
+  if (!visible) return null;
 
-          <View style={styles.actions}>
-            <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={onNo}>
-              <Text style={styles.secondaryText}>No</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={onYes}>
-              <Text style={styles.primaryText}>Yes</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
+  return React.createElement(
+    Modal,
+    { visible, transparent: true, animationType: 'fade', onRequestClose: onClose },
+    React.createElement(
+      Pressable,
+      { style: styles.backdrop, onPress: onClose },
+      React.createElement(
+        Pressable,
+        { style: styles.card, onPress: () => {} },
+        React.createElement(Text, { style: styles.title }, title),
+        React.createElement(Text, { style: styles.body }, `Estimated tonnage is ${tonnage || 'above threshold'}. Our team can review your project and provide a follow-up quote.`),
+        React.createElement(Text, { style: styles.note }, 'This is a preliminary estimation tool. Not for structural design.'),
+        React.createElement(
+          View,
+          style=styles.actions,
+          React.createElement(
+            Pressable,
+            { style: [styles.button, styles.secondary], onPress: onClose },
+            React.createElement(Text, { style: styles.secondaryText }, 'Not now')
+          ),
+          React.createElement(
+            Pressable,
+            { style: [styles.button, styles.primary], onPress: onLeadPress },
+            React.createElement(Text, { style: styles.primaryText }, 'Request quote')
+          )
+        )
+      )
+    )
   );
-};
+}
 
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31, 41, 55, 0.55)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: SPACING.lg,
   },
   card: {
     width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    maxWidth: 420,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.lg,
   },
   title: {
-    fontSize: 20,
-    lineHeight: 28,
+    color: COLORS.text,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#0A2540',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   body: {
+    color: COLORS.textMuted,
     fontSize: 14,
-    lineHeight: 21,
-    color: '#1F2937',
-    marginBottom: 18,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  note: {
+    color: COLORS.warning,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 16,
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    gap: 10,
   },
   button: {
-    minWidth: 96,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 14,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
+    paddingVertical: 14,
+    borderRadius: RADIUS.md,
   },
-  secondaryButton: {
-    backgroundColor: '#E5E7EB',
+  secondary: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  primaryButton: {
-    backgroundColor: '#F97316',
+  primary: {
+    backgroundColor: COLORS.primary,
   },
   secondaryText: {
-    color: '#1F2937',
+    color: COLORS.text,
     fontWeight: '700',
+    fontSize: 14,
   },
   primaryText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: COLORS.black,
+    fontWeight: '800',
+    fontSize: 14,
   },
 });
 
-export default LeadQuoteModal;
+module.exports = LeadQuoteModal;
+module.exports.default = LeadQuoteModal;

@@ -1,69 +1,40 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+const React = require('react');
+const { StyleSheet, Text, View } = require('react-native');
+const { COLORS, SPACING, RADIUS } = require('../theme/appTheme');
 
-const COLORS = {
-  primary: '#0A2540',
-  accent: '#F97316',
-  successBg: '#ECFDF5',
-  successBorder: '#A7F3D0',
-  successText: '#065F46',
-  errorBg: '#FEF2F2',
-  errorBorder: '#FECACA',
-  errorText: '#991B1B',
-  infoBg: '#EFF6FF',
-  infoBorder: '#BFDBFE',
-  infoText: '#1D4ED8',
-  text: '#1F2937',
-  muted: '#6B7280',
-};
+function FeedbackMessage({ type = 'info', title, message, style }) {
+  const palette = {
+    success: { bg: '#0F2418', border: COLORS.success, title: '#BBF7D0', body: '#DCFCE7' },
+    warning: { bg: '#2A1C10', border: COLORS.warning, title: '#FED7AA', body: '#FFEDD5' },
+    danger: { bg: '#2A1212', border: COLORS.danger, title: '#FECACA', body: '#FEE2E2' },
+    info: { bg: '#102433', border: COLORS.secondary, title: '#BAE6FD', body: '#E0F2FE' },
+  }[type] || { bg: '#102433', border: COLORS.secondary, title: '#BAE6FD', body: '#E0F2FE' };
 
-const FeedbackMessage = ({ type = 'info', title, message, style }) => {
-  const variant = VARIANTS[type] || VARIANTS.info;
-
-  return (
-    <View style={[styles.container, variant.container, style]}>
-      <Text style={[styles.title, variant.title]}>{title}</Text>
-      {message ? <Text style={[styles.message, variant.message]}>{message}</Text> : null}
-    </View>
+  return React.createElement(
+    View,
+    [styles.container, { backgroundColor: palette.bg, borderColor: palette.border }, style],
+    title ? React.createElement(Text, { style: [styles.title, { color: palette.title }] }, title) : null,
+    message ? React.createElement(Text, { style: [styles.message, { color: palette.body }] }, message) : null
   );
-};
-
-const VARIANTS = {
-  success: {
-    container: { backgroundColor: COLORS.successBg, borderColor: COLORS.successBorder },
-    title: { color: COLORS.successText },
-    message: { color: COLORS.successText },
-  },
-  error: {
-    container: { backgroundColor: COLORS.errorBg, borderColor: COLORS.errorBorder },
-    title: { color: COLORS.errorText },
-    message: { color: COLORS.errorText },
-  },
-  info: {
-    container: { backgroundColor: COLORS.infoBg, borderColor: COLORS.infoBorder },
-    title: { color: COLORS.infoText },
-    message: { color: COLORS.infoText },
-  },
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
   title: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     marginBottom: 4,
-    color: COLORS.text,
   },
   message: {
     fontSize: 13,
     lineHeight: 19,
-    color: COLORS.muted,
   },
 });
 
-export default FeedbackMessage;
+module.exports = FeedbackMessage;
+module.exports.default = FeedbackMessage;

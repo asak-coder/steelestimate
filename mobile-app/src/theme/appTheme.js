@@ -1,26 +1,28 @@
-export const APP_THEME = {
+const { DISCLAIMER } = require('../constants/appConstants');
+
+const APP_THEME = {
   colors: {
-    primary: '#0A2540',
-    accent: '#F97316',
-    background: '#F5F7FA',
-    surface: '#FFFFFF',
-    surfaceMuted: '#E9EEF5',
-    text: '#1F2937',
-    textMuted: '#6B7280',
-    border: '#D7DEE8',
-    shadow: 'rgba(10, 37, 64, 0.12)',
-    success: '#10B981',
+    background: '#0B1220',
+    surface: '#111A2E',
+    surfaceAlt: '#16223A',
+    primary: '#F97316',
+    primaryDark: '#C2410C',
+    accent: '#38BDF8',
+    success: '#22C55E',
     warning: '#F59E0B',
     danger: '#EF4444',
+    text: '#F8FAFC',
+    textMuted: '#94A3B8',
+    border: '#26324A',
+    shadow: '#020617',
   },
   spacing: {
-    xxs: 4,
-    xs: 8,
-    sm: 12,
-    md: 16,
-    lg: 20,
-    xl: 24,
-    xxl: 32,
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
   },
   radius: {
     sm: 10,
@@ -29,11 +31,20 @@ export const APP_THEME = {
     xl: 24,
   },
   typography: {
-    title: 32,
+    title: 30,
     sectionTitle: 20,
-    body: 16,
-    caption: 13,
+    body: 15,
+    caption: 12,
+    label: 14,
   },
+  layout: {
+    maxContentWidth: 720,
+  },
+  disclaimer: DISCLAIMER,
 };
 
-export default APP_THEME;
+module.exports = {
+  APP_THEME,
+  default: APP_THEME,
+  DISCLAIMER,
+};

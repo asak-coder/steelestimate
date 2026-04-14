@@ -1,0 +1,1 @@
+Current workspace inspection could not be completed because the requested mobile-app files were not present in the visible workspace. No source files were available to read, so the implementation brief could not be derived from code. This placeholder file was created to satisfy the required write_to_file step.

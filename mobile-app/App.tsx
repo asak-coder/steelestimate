@@ -1,17 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
-const Stack = createNativeStackNavigator();
+const RootNavigator = require('./src/navigation/RootNavigator');
 
 function App() {
-  return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash" component={() => null} />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
+  return <RootNavigator />;
 }
 
 export default App;
