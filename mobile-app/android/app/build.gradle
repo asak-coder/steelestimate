@@ -1,76 +1,25 @@
 apply plugin: "com.android.application"
-apply plugin: "com.facebook.react"
 apply plugin: "org.jetbrains.kotlin.android"
-
-react {
-    autolinkLibrariesWithApp()
-}
-
-def enableProguardInReleaseBuilds = true
-def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
     namespace "com.steelestimate"
-    compileSdkVersion rootProject.ext.compileSdkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdkVersion 33
 
     defaultConfig {
         applicationId "com.steelestimate"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdkVersion 21
+        targetSdkVersion 33
         versionCode 1
-        versionName "1.0.0"
-        multiDexEnabled true
-        vectorDrawables.useSupportLibrary = true
-    }
-
-    signingConfigs {
-        release {
-            if (project.hasProperty("STEEL_ESTIMATE_UPLOAD_STORE_FILE")) {
-                storeFile file(STEEL_ESTIMATE_UPLOAD_STORE_FILE)
-                storePassword STEEL_ESTIMATE_UPLOAD_STORE_PASSWORD
-                keyAlias STEEL_ESTIMATE_UPLOAD_KEY_ALIAS
-                keyPassword STEEL_ESTIMATE_UPLOAD_KEY_PASSWORD
-            }
-        }
+        versionName "1.0"
     }
 
     buildTypes {
-        debug {
-            debuggable true
-        }
         release {
-            minifyEnabled enableProguardInReleaseBuilds
-            shrinkResources enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            signingConfig signingConfigs.release
+            minifyEnabled false
         }
-    }
-
-    packagingOptions {
-        resources {
-            excludes += ["META-INF/*"]
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 }
 
 dependencies {
     implementation("com.facebook.react:react-android")
-    implementation("androidx.multidex:multidex:2.0.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    if (hermesEnabled.toBoolean()) {
-        implementation("com.facebook.react:hermes-android")
-    } else {
-        implementation jscFlavor
-    }
 }

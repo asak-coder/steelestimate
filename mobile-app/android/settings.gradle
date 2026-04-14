@@ -1,15 +1,7 @@
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-
 rootProject.name = "Steel Estimate"
 
 include(":app")
 
-// Manual React Native autolinking (stable for Windows)
-apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
-applyNativeModulesSettingsGradle(settings)
+// Stable React Native autolinking (Windows-safe)
+apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle");
+applyNativeModulesSettingsGradle(settings);
