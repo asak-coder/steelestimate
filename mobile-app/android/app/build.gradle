@@ -44,10 +44,10 @@ android {
             keyPassword "android"
         }
         release {
-            def storeFileName = keystoreProperties["STEEL_ESTIMATE_UPLOAD_STORE_FILE"] ?: "release.keystore"
-            def storePasswordValue = keystoreProperties["STEEL_ESTIMATE_UPLOAD_STORE_PASSWORD"] ?: "changeit-store-password"
-            def keyAliasValue = keystoreProperties["STEEL_ESTIMATE_UPLOAD_KEY_ALIAS"] ?: "steelestimate"
-            def keyPasswordValue = keystoreProperties["STEEL_ESTIMATE_UPLOAD_KEY_PASSWORD"] ?: "changeit-key-password"
+            def storeFileName = keystoreProperties["MYAPP_UPLOAD_STORE_FILE"] ?: "release.keystore"
+            def storePasswordValue = keystoreProperties["MYAPP_UPLOAD_STORE_PASSWORD"] ?: "changeit-store-password"
+            def keyAliasValue = keystoreProperties["MYAPP_UPLOAD_KEY_ALIAS"] ?: "steelestimate"
+            def keyPasswordValue = keystoreProperties["MYAPP_UPLOAD_KEY_PASSWORD"] ?: "changeit-key-password"
 
             storeFile file(storeFileName)
             storePassword storePasswordValue
