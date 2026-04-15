@@ -1,15 +1,22 @@
 pluginManagement {
+    includeBuild("../node_modules/@react-native/gradle-plugin")
+
     repositories {
+        google()
+        mavenCentral()
         gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
         google()
         mavenCentral()
     }
 }
 
-rootProject.name = "Steel Estimate"
-
+rootProject.name = "SteelEstimate"
 include(":app")
 
-// Stable React Native autolinking (Windows-safe)
-apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle");
-applyNativeModulesSettingsGradle(settings);
+includeBuild("../node_modules/@react-native/gradle-plugin")
