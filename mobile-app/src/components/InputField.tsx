@@ -33,30 +33,35 @@ const InputField: React.FC<InputFieldProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   label: {
     marginBottom: 8,
     color: '#0F172A',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   input: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     backgroundColor: '#FFFFFF',
     color: '#0F172A',
+    fontSize: 15,
+    minHeight: 52,
   },
   inputError: {
     borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
   },
   errorText: {
     marginTop: 6,
     color: '#EF4444',
     fontSize: 12,
+    fontWeight: '500',
   },
 });
 
