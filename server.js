@@ -18,7 +18,28 @@ const v1LeadRoutes = require('./routes/v1/leadRoutes');
 const v1AuthRoutes = require('./routes/v1/authRoutes');
 
 const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'CORS_ORIGIN'];
+const mongoose = require("mongoose");
 
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => {
+  console.log("MongoDB Connected");
+})
+.catch((err) => {
+  console.error("MongoDB Error:", err);
+});
+app.get("/health", (req, res) => {
+  const isReady = mongoose.connection.readyState === 1;
+
+  res.json({
+    success: true,
+    status: "ok",
+    ready: isReady,
+    timestamp: new Date(),
+  });
+});
 function normalizeOrigins(value) {
   return String(value || '')
     .split(',')
