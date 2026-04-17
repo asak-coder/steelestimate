@@ -1,5 +1,0 @@
-- [x] Analyze backend/admin/mobile requirements
-- [x] Inspect existing auth and lead routes
-- [x] Implement backend JWT auth and route protection
-- [x] Verify frontend/mobile integration points
-- [ ] Validate build/deployment readiness
