@@ -40,7 +40,7 @@ function pickLeadLabel(status) {
   return status || 'Unknown';
 }
 
-module.exports = {
+export {
   formatCurrency,
   formatDateTime,
   formatDate,

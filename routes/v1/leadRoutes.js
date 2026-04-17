@@ -6,7 +6,8 @@ const {
   updateLeadStatus,
   updateLeadScoring,
   getHistory,
-  getAdminStats
+  getAdminStats,
+  getDashboard
 } = require('../../controllers/leadController');
 const { leadStatusSchema } = require('../../validators/leadValidator');
 const { validate } = require('../../middleware/validation');
@@ -19,9 +20,11 @@ router.use(requireAuth);
 
 router.get('/history', getHistory);
 router.get('/admin/stats', requireAdmin, adminLimiter, getAdminStats);
+router.get('/dashboard', getDashboard);
 router.get('/', getLeads);
 router.get('/:id', getLeadById);
 router.patch('/:id', validate(leadStatusSchema), updateLeadStatus);
+router.put('/:id', updateLeadStatus);
 router.post('/:id/score', updateLeadScoring);
 
 module.exports = router;

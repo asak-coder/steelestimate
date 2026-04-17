@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://steelestimate-backend.onrender.com/api";
 
 async function request(path, options = {}) {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null;

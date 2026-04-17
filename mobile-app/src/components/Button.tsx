@@ -6,6 +6,7 @@ import {
   Text,
   ViewStyle,
 } from 'react-native';
+import { theme } from '../theme/theme';
 
 type ButtonProps = {
   title: string;
@@ -28,6 +29,7 @@ const Button: React.FC<ButtonProps> = ({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      android_ripple={{ color: 'rgba(255,255,255,0.18)' }}
       style={({ pressed }) => [
         styles.button,
         isDisabled && styles.buttonDisabled,
@@ -47,9 +49,9 @@ const Button: React.FC<ButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: '#2563EB',
-    borderRadius: 16,
+    borderRadius: theme.radius.lg,
     minHeight: 52,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0F172A',
@@ -63,13 +65,14 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   buttonDisabled: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: theme.colors.disabled,
     shadowOpacity: 0,
     elevation: 0,
+    opacity: 0.8,
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: theme.typography.bodyLg,
     fontWeight: '700',
     letterSpacing: 0.2,
   },

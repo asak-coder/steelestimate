@@ -91,11 +91,12 @@ async function startServer() {
     validateEnv();
 
     const app = createApp();
-    const port = Number(process.env.PORT) || 10000;
+  const port = Number(process.env.PORT) || 5000;
 
     const server = app.listen(port, '0.0.0.0', () => {
-      console.log(`[startup] Server running on port ${port}`);
+      console.log(`[startup] Server running on 0.0.0.0:${port}`);
       console.log(`[startup] Health check available at /health`);
+      console.log(`[startup] Public base URL must be provided by deployment platform`);
     });
 
     connectDB().catch((error) => {

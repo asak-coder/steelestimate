@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { formatCurrency, formatDateTime } from '../lib/format';
 
 function ProjectHistoryTable({ history = [], onViewDetails, onDownloadPdf, emptyMessage = 'No project history found.' }) {
@@ -28,13 +29,12 @@ function ProjectHistoryTable({ history = [], onViewDetails, onDownloadPdf, empty
                   <td className="px-5 py-4 align-top text-sm text-[var(--muted)]">{item.location}</td>
                   <td className="px-5 py-4 align-top">
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
+                      <Link
                         className="rounded-lg border border-[var(--border)] bg-white/5 px-3 py-2 text-sm text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10"
-                        onClick={() => onViewDetails?.(item)}
+                        href={`/admin/leads/${item.id}`}
                       >
                         View details
-                      </button>
+                      </Link>
                       <button
                         type="button"
                         className="rounded-lg border border-[var(--border)] bg-white/5 px-3 py-2 text-sm text-white transition hover:border-emerald-400/50 hover:bg-emerald-400/10"
@@ -54,4 +54,4 @@ function ProjectHistoryTable({ history = [], onViewDetails, onDownloadPdf, empty
   );
 }
 
-module.exports = ProjectHistoryTable;
+export default ProjectHistoryTable;

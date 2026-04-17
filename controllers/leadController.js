@@ -2,7 +2,22 @@ const Lead = require('../models/Lead');
 const AppError = require('../utils/appError');
 const { calculateLeadScore } = require('../services/leadScoringService');
 
-const allowedStatuses = ['new', 'contacted', 'converted'];
+const allowedStatuses = ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'];
+const legacyStatusMap = {
+  new: 'NEW',
+  contacted: 'IN_PROGRESS',
+  converted: 'COMPLETED'
+};
+const statusKeys = ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'];
+const adminOnlyFields = new Set([
+  'score',
+  'tag',
+  'optimizedPrice',
+  'marginSuggestion',
+  'pricingJustification',
+  'quotationText',
+  'cost'
+]);
 
 const isValidObjectId = (value) => typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value);
 
@@ -28,7 +43,26 @@ const sanitizeLead = (lead) => ({
 const getLeads = async (req, res, next) => {
   try {
     const userFilter = req.user?.role === 'admin' ? {} : { userId: req.user.id };
-    const leads = await Lead.find(userFilter).sort({ createdAt: -1 });
+    const { status, search } = req.query;
+    const query = { ...userFilter };
+
+    if (status) {
+      const normalizedStatus = String(status).toUpperCase();
+      if (!allowedStatuses.includes(normalizedStatus)) {
+        throw new AppError('Invalid status filter', 400);
+      }
+      query.status = normalizedStatus;
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { clientName: searchRegex },
+        { company: searchRegex }
+      ];
+    }
+
+    const leads = await Lead.find(query).sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -70,14 +104,17 @@ const getLeadById = async (req, res, next) => {
 const updateLeadStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const payload = { ...req.body };
 
     if (!isValidObjectId(id)) {
       throw new AppError('Invalid lead id', 400);
     }
 
-    if (!allowedStatuses.includes(status)) {
-      throw new AppError('status must be one of new, contacted, converted', 400);
+    if (payload.status) {
+      payload.status = String(payload.status).toUpperCase();
+      if (!allowedStatuses.includes(payload.status)) {
+        throw new AppError('status must be one of NEW, IN_PROGRESS, COMPLETED, REJECTED', 400);
+      }
     }
 
     const lead = await Lead.findById(id);
@@ -90,12 +127,17 @@ const updateLeadStatus = async (req, res, next) => {
       throw new AppError('Not authorized to update this lead', 403);
     }
 
-    lead.status = status;
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] !== undefined && (key === 'status' || req.user?.role === 'admin' || !adminOnlyFields.has(key))) {
+        lead[key] = payload[key];
+      }
+    });
+
     await lead.save();
 
     return res.status(200).json({
       success: true,
-      message: 'Lead status updated successfully',
+      message: 'Lead updated successfully',
       data: sanitizeLead(lead)
     });
   } catch (error) {
@@ -165,6 +207,50 @@ const getHistory = async (req, res, next) => {
   }
 };
 
+const getDashboard = async (req, res, next) => {
+  try {
+    const [stats] = await Lead.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalLeads: { $sum: 1 },
+          statusCounts: {
+            $push: '$status'
+          }
+        }
+      }
+    ]);
+
+    const totalLeads = stats?.totalLeads || 0;
+    const baseCounts = statusKeys.reduce((acc, key) => {
+      acc[key] = 0;
+      return acc;
+    }, {});
+    const statusCounts = (stats?.statusCounts || []).reduce((acc, status) => {
+      const normalized = legacyStatusMap[String(status || '').toLowerCase()] || String(status || '').toUpperCase() || 'NEW';
+      if (acc[normalized] !== undefined) {
+        acc[normalized] += 1;
+      }
+      return acc;
+    }, baseCounts);
+
+    const recentLeads = await Lead.find()
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalLeads,
+        statusCounts,
+        recentLeads: recentLeads.map(sanitizeLead)
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getAdminStats = async (req, res, next) => {
   try {
     const [stats] = await Lead.aggregate([
@@ -175,7 +261,7 @@ const getAdminStats = async (req, res, next) => {
           totalEstimatedRevenue: { $sum: { $ifNull: ['$optimizedPrice', 0] } },
           convertedLeads: {
             $sum: {
-              $cond: [{ $eq: ['$status', 'converted'] }, 1, 0]
+              $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0]
             }
           }
         }
@@ -213,5 +299,6 @@ module.exports = {
   updateLeadStatus,
   updateLeadScoring,
   getHistory,
-  getAdminStats
+  getAdminStats,
+  getDashboard
 };

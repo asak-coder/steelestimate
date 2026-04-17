@@ -65,13 +65,24 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['new', 'contacted', 'converted'],
-    default: 'new',
+    enum: ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'],
+    default: 'NEW',
+    required: true
   },
   createdAt: {
     type: Date,
     default: Date.now,
   },
+});
+
+leadSchema.pre('save', function normalizeStatus(next) {
+  if (typeof this.status === 'string') {
+    this.status = this.status.toUpperCase();
+  }
+  if (!this.status) {
+    this.status = 'NEW';
+  }
+  next();
 });
 
 module.exports = mongoose.models.Lead || mongoose.model('Lead', leadSchema);

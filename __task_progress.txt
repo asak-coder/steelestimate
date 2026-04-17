@@ -1,5 +1,5 @@
-- [x] Analyze requirements
-- [x] Create reusable unit conversion service
-- [x] Wire unit system into backend calculations and response conversion
-- [ ] Add frontend unit system dropdown and pass selection to backend
-- [ ] Verify implementation
+- [x] Analyze backend/admin/mobile requirements
+- [x] Inspect existing auth and lead routes
+- [x] Implement backend JWT auth and route protection
+- [x] Verify frontend/mobile integration points
+- [ ] Validate build/deployment readiness

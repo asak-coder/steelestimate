@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import LeadDetailsPanel from '../../../../../components/LeadDetailsPanel';
-import { getLeadById, updateLeadStatus } from '../../../../../lib/api';
+import LeadDetailsPanel from '../../../../components/LeadDetailsPanel';
+import { getLeadById, updateLeadStatus } from '../../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 

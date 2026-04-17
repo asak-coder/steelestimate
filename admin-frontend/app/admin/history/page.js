@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import ProjectHistoryTable from '../../../../components/ProjectHistoryTable';
-import { getProjectHistory } from '../../../../lib/api';
+import ProjectHistoryTable from '../../../components/ProjectHistoryTable';
+import { getProjectHistory } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 

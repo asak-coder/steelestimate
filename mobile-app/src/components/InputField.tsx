@@ -6,6 +6,7 @@ import {
   TextInputProps,
   View,
 } from 'react-native';
+import { theme } from '../theme/theme';
 
 type InputFieldProps = TextInputProps & {
   label: string;
@@ -24,7 +25,7 @@ const InputField: React.FC<InputFieldProps> = ({
       <TextInput
         {...props}
         style={[styles.input, style, error ? styles.inputError : null]}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={theme.colors.textMuted}
       />
       {!!error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -33,33 +34,33 @@ const InputField: React.FC<InputFieldProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 18,
+    marginBottom: theme.spacing.lg,
   },
   label: {
-    marginBottom: 8,
-    color: '#0F172A',
-    fontSize: 14,
+    marginBottom: theme.spacing.sm,
+    color: theme.colors.text,
+    fontSize: theme.typography.label,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 16,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    color: '#0F172A',
-    fontSize: 15,
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.text,
+    fontSize: theme.typography.body,
     minHeight: 52,
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: theme.colors.danger,
     backgroundColor: '#FEF2F2',
   },
   errorText: {
-    marginTop: 6,
-    color: '#EF4444',
+    marginTop: theme.spacing.xs,
+    color: theme.colors.danger,
     fontSize: 12,
     fontWeight: '500',
   },

@@ -5,9 +5,14 @@ export type ApiErrorPayload = {
   details?: unknown;
 };
 
-export const API_BASE_URL = process.env.REACT_NATIVE_API_BASE_URL || 'http://10.0.2.2:3000';
+export const API_BASE_URL =
+  process.env.REACT_NATIVE_API_BASE_URL ||
+  process.env.API_BASE_URL ||
+  'https://steelestimate-backend.onrender.com';
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_NETWORK_ERROR_MESSAGE = 'Unable to reach the server. Check your connection and try again.';
+const DEFAULT_TIMEOUT_ERROR_MESSAGE = 'Request timed out. Please try again.';
 
 export class ApiError extends Error {
   status: number;
@@ -37,6 +42,10 @@ function createTimeoutSignal(timeoutMs: number): AbortController {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), timeoutMs);
   return controller;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 async function parseResponse(response: Response): Promise<unknown> {
@@ -97,16 +106,16 @@ export async function apiRequest<T>(
       throw error;
     }
 
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (isAbortError(error)) {
       throw new ApiError({
-        message: 'Request timed out',
+        message: DEFAULT_TIMEOUT_ERROR_MESSAGE,
         status: 408,
         code: 'REQUEST_TIMEOUT',
       });
     }
 
     throw new ApiError({
-      message: error instanceof Error ? error.message : 'Network request failed',
+      message: error instanceof Error ? error.message : DEFAULT_NETWORK_ERROR_MESSAGE,
       status: 0,
       code: 'NETWORK_ERROR',
       details: error,

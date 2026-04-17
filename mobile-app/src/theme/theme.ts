@@ -1,0 +1,47 @@
+export const theme = {
+  colors: {
+    primary: '#2563EB',
+    primaryDark: '#1D4ED8',
+    background: '#F1F5F9',
+    surface: '#FFFFFF',
+    surfaceMuted: '#F8FAFC',
+    border: '#E2E8F0',
+    text: '#0F172A',
+    textSecondary: '#475569',
+    textMuted: '#64748B',
+    success: '#059669',
+    danger: '#EF4444',
+    info: '#0EA5E9',
+    pillBackground: '#DBEAFE',
+    pillText: '#1D4ED8',
+    disabled: '#94A3B8',
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    xxl: 24,
+    xxxl: 32,
+  },
+  radius: {
+    sm: 12,
+    md: 16,
+    lg: 18,
+    xl: 24,
+    pill: 999,
+  },
+  typography: {
+    kicker: 13,
+    label: 14,
+    body: 15,
+    bodyLg: 16,
+    titleSm: 18,
+    titleMd: 24,
+    titleLg: 30,
+    titleXl: 34,
+  },
+} as const;
+
+export type AppTheme = typeof theme;

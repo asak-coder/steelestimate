@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import Button from '../components/Button';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { theme } from '../theme/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -61,23 +62,23 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: theme.colors.background,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: theme.spacing.xl,
     justifyContent: 'center',
   },
   contentTablet: {
-    paddingHorizontal: 32,
+    paddingHorizontal: theme.spacing.xxxl,
     alignItems: 'center',
   },
   heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.xxl,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.colors.border,
     shadowColor: '#0F172A',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 8 },
@@ -87,59 +88,59 @@ const styles = StyleSheet.create({
   heroCardTablet: {
     maxWidth: 760,
     width: '100%',
-    padding: 32,
+    padding: theme.spacing.xxxl,
   },
   kicker: {
-    color: '#2563EB',
-    fontSize: 13,
+    color: theme.colors.primary,
+    fontSize: theme.typography.kicker,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   title: {
-    fontSize: 34,
+    fontSize: theme.typography.titleXl,
     fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 12,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: theme.typography.bodyLg,
     lineHeight: 24,
-    color: '#475569',
-    marginBottom: 24,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xxl,
   },
   metricRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.xxl,
     flexWrap: 'wrap',
   },
   metricCard: {
     flexGrow: 1,
     minWidth: 96,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.colors.border,
   },
   metricLabel: {
-    color: '#64748B',
+    color: theme.colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   metricValue: {
-    marginTop: 4,
-    color: '#0F172A',
-    fontSize: 15,
+    marginTop: theme.spacing.xs,
+    color: theme.colors.text,
+    fontSize: theme.typography.body,
     fontWeight: '700',
   },
   buttonGroup: {
-    gap: 12,
+    gap: theme.spacing.md,
   },
 });
 

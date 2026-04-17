@@ -1,7 +1,7 @@
-import StatCard from '../../../../components/StatCard';
-import LeadTable from '../../../../components/LeadTable';
-import { getAdminStats, getLeads } from '../../../../lib/api';
-import { formatCurrency } from '../../../../lib/format';
+import StatCard from '../../../components/StatCard';
+import LeadTable from '../../../components/LeadTable';
+import { getAdminStats } from '../../../lib/api';
+import { formatCurrency } from '../../../lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,9 +11,21 @@ async function loadDashboardData() {
 
     const stats = statsResponse?.data || statsResponse || {};
     const recentLeads = Array.isArray(stats.recentLeads) ? stats.recentLeads.slice(0, 5) : [];
+    const statusCounts = stats.statusCounts || {
+      NEW: 0,
+      IN_PROGRESS: 0,
+      COMPLETED: 0,
+      REJECTED: 0
+    };
 
     return {
-      stats,
+      stats: {
+        totalLeads: stats.totalLeads ?? 0,
+        totalEstimatedRevenue: stats.totalEstimatedRevenue ?? 0,
+        conversionRate: stats.conversionRate ?? 0,
+        conversionCount: stats.conversionCount ?? 0,
+        statusCounts
+      },
       recentLeads
     };
   } catch (error) {
@@ -22,7 +34,13 @@ async function loadDashboardData() {
         totalLeads: 0,
         totalEstimatedRevenue: 0,
         conversionRate: 0,
-        conversionCount: 0
+        conversionCount: 0,
+        statusCounts: {
+          NEW: 0,
+          IN_PROGRESS: 0,
+          COMPLETED: 0,
+          REJECTED: 0
+        }
       },
       recentLeads: [],
       error: error.message
@@ -42,9 +60,12 @@ export default async function AdminDashboardPage() {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">Operations overview</h1>
             <p className="mt-2 text-sm text-[var(--muted)]">Monitor lead volume, estimated revenue and active pipeline performance.</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <a className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-2 text-sm text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10" href="/admin/leads">
               View all leads
+            </a>
+            <a className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-2 text-sm text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10" href="/admin/history">
+              View history
             </a>
           </div>
         </header>
@@ -59,6 +80,9 @@ export default async function AdminDashboardPage() {
           <StatCard title="Total Leads" value={stats.totalLeads ?? 0} hint="All tracked opportunities" />
           <StatCard title="Total Revenue Estimate" value={formatCurrency(stats.totalEstimatedRevenue ?? 0)} hint="Projected pipeline value" accent="success" />
           <StatCard title="Conversion %" value={`${Number(stats.conversionRate || 0).toFixed(1)}%`} hint="Won / total leads" accent="warning" />
+          <StatCard title="Completed" value={stats.statusCounts?.COMPLETED ?? 0} hint="Closed opportunities" accent="success" />
+          <StatCard title="In Progress" value={stats.statusCounts?.IN_PROGRESS ?? 0} hint="Active pipeline" accent="warning" />
+          <StatCard title="New" value={stats.statusCounts?.NEW ?? 0} hint="Fresh opportunities" />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
@@ -83,7 +107,12 @@ export default async function AdminDashboardPage() {
               </div>
               <div className="rounded-xl border border-[var(--border)] bg-white/5 p-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">Status coverage</div>
-                <div className="mt-2 text-sm text-white">Use the leads page to filter by status and review all records.</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-white">
+                  <div>New: {stats.statusCounts?.NEW ?? 0}</div>
+                  <div>In Progress: {stats.statusCounts?.IN_PROGRESS ?? 0}</div>
+                  <div>Completed: {stats.statusCounts?.COMPLETED ?? 0}</div>
+                  <div>Rejected: {stats.statusCounts?.REJECTED ?? 0}</div>
+                </div>
               </div>
             </div>
           </aside>

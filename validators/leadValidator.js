@@ -1,7 +1,7 @@
 const { z } = require('zod');
 
 const leadStatusSchema = z.object({
-  status: z.enum(['new', 'contacted', 'converted'])
+  status: z.enum(['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'])
 });
 
 const leadCreateSchema = z.object({

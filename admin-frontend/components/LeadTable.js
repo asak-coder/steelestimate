@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { formatCurrency, formatDateTime, pickLeadLabel } from '../lib/format';
 
 function LeadTable({ leads = [], onStatusChange, emptyMessage = 'No leads found.' }) {
@@ -39,9 +40,9 @@ function LeadTable({ leads = [], onStatusChange, emptyMessage = 'No leads found.
                   <td className="px-5 py-4 align-top text-sm text-white">{typeof lead.score === 'number' ? lead.score : '—'}</td>
                   <td className="px-5 py-4 align-top">
                     <div className="flex flex-wrap gap-2">
-                      <a className="rounded-lg border border-[var(--border)] bg-white/5 px-3 py-2 text-sm text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10" href={`/admin/leads/${lead._id}`}>
+                      <Link className="rounded-lg border border-[var(--border)] bg-white/5 px-3 py-2 text-sm text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10" href={`/admin/leads/${lead._id}`}>
                         View
-                      </a>
+                      </Link>
                       {onStatusChange ? (
                         <button
                           type="button"
@@ -63,4 +64,4 @@ function LeadTable({ leads = [], onStatusChange, emptyMessage = 'No leads found.
   );
 }
 
-module.exports = LeadTable;
+export default LeadTable;

@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import LeadTable from '../../../../components/LeadTable';
-import { getLeads } from '../../../../lib/api';
-import { formatDate } from '../../../../lib/format';
+import LeadTable from '../../../components/LeadTable';
+import { getLeads } from '../../../lib/api';
+import { formatDate } from '../../../lib/format';
 
 export const dynamic = 'force-dynamic';
 
