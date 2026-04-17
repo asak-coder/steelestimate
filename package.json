@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "build": "echo \"No frontend build in backend package\""
+     "build": "next build"
   },
   "keywords": [
     "nodejs",
