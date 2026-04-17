@@ -14,7 +14,7 @@ const { validate } = require('../middleware/validation');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { adminLimiter } = require('../middleware/rateLimiters');
 
-const { Lead } = require('../models/Lead');
+const Lead = require('../models/Lead');
 
 const router = express.Router();
 
