@@ -1,52 +1,94 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://steelestimate-backend.onrender.com/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
-async function request(path, options = {}) {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
+// ============================
+// AUTH TOKEN (ADMIN)
+// ============================
+function getToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('token');
+}
+
+function getHeaders() {
+  const token = getToken();
+
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
   };
+}
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+// ============================
+// LEADS
+// ============================
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
+export async function getLeads() {
+  const res = await fetch(`${API_BASE}/api/leads`, {
+    headers: getHeaders(),
+  });
+  return res.json();
+}
+
+export async function getLeadById(id) {
+  const res = await fetch(`${API_BASE}/api/leads/${id}`, {
+    headers: getHeaders(),
+  });
+  return res.json();
+}
+
+export async function updateLeadStatus(id, data) {
+  const res = await fetch(`${API_BASE}/api/leads/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+// ============================
+// DASHBOARD
+// ============================
+
+export async function getAdminStats() {
+  const res = await fetch(`${API_BASE}/api/leads/admin/stats`, {
+    headers: getHeaders(),
+  });
+  return res.json();
+}
+
+export async function getDashboard() {
+  const res = await fetch(`${API_BASE}/api/leads/dashboard`, {
+    headers: getHeaders(),
+  });
+  return res.json();
+}
+
+// ============================
+// HISTORY
+// ============================
+
+export async function getProjectHistory() {
+  const res = await fetch(`${API_BASE}/api/leads/history`, {
+    headers: getHeaders(),
+  });
+  return res.json();
+}
+
+// ============================
+// AUTH
+// ============================
+
+export async function login(email, password) {
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
   });
 
-  const isJson = response.headers.get("content-type")?.includes("application/json");
-  const data = isJson ? await response.json() : null;
+  const data = await res.json();
 
-  if (!response.ok) {
-    const message = data?.message || data?.error || "Request failed";
-    throw new Error(message);
+  if (data.token && typeof window !== 'undefined') {
+    localStorage.setItem('token', data.token);
   }
 
   return data;
 }
-
-export async function getMe() {
-  return request("/auth/me");
-}
-
-export async function getPlans() {
-  return request("/payments/plans");
-}
-
-export async function createPaymentOrder(planId) {
-  return request("/payments/create-order", {
-    method: "POST",
-    body: JSON.stringify({ planId }),
-  });
-}
-
-export async function verifyPayment(payload) {
-  return request("/payments/verify", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export default request;
