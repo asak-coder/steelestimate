@@ -1,81 +1,116 @@
 const mongoose = require('mongoose');
 
 const leadSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    index: true
-  },
-  clientName: {
+  // =============================
+  // BASIC LEAD (MOBILE)
+  // =============================
+  name: {
     type: String,
-    required: true,
     trim: true,
   },
+
   phone: {
     type: String,
     required: true,
     trim: true,
   },
+
+  message: {
+    type: String,
+    trim: true,
+  },
+
+  // =============================
+  // OPTIONAL CLIENT DETAILS
+  // =============================
   email: {
     type: String,
-    required: true,
     trim: true,
     lowercase: true,
   },
+
+  clientName: {
+    type: String,
+    trim: true,
+  },
+
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+
+  // =============================
+  // ENGINEERING DATA (ADMIN)
+  // =============================
   projectData: {
     type: Object,
-    required: true,
+    default: null,
   },
+
   boq: {
     type: Object,
-    required: true,
+    default: null,
   },
+
   cost: {
     type: Object,
-    required: true,
+    default: null,
   },
+
   quotationText: {
     type: String,
-    default: ''
+    default: '',
   },
+
+  // =============================
+  // AI / BUSINESS LOGIC
+  // =============================
   score: {
     type: Number,
     default: 0,
     min: 0,
-    max: 100
+    max: 100,
   },
+
   tag: {
     type: String,
     enum: ['HOT', 'WARM', 'COLD'],
-    default: 'COLD'
+    default: 'COLD',
   },
+
   optimizedPrice: {
     type: Number,
     default: 0,
-    min: 0
+    min: 0,
   },
+
   marginSuggestion: {
     type: Object,
-    default: null
+    default: null,
   },
+
   pricingJustification: {
     type: String,
-    default: ''
+    default: '',
   },
+
+  // =============================
+  // STATUS
+  // =============================
   status: {
     type: String,
     enum: ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'],
     default: 'NEW',
-    required: true
   },
+
   createdAt: {
     type: Date,
     default: Date.now,
   },
 });
 
-leadSchema.pre('save', function normalizeStatus(next) {
+// Normalize status
+leadSchema.pre('save', function (next) {
   if (typeof this.status === 'string') {
     this.status = this.status.toUpperCase();
   }
