@@ -1,29 +1,12 @@
 {
-  "name": "steelestimate-frontend",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "next": "14.2.35",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  }
-}
-{
   "name": "peb-ai-estimation-engine",
   "version": "1.0.0",
-  "description": "Local-running Node.js backend for PEB AI Estimation Engine",
+  "description": "Node.js backend for PEB AI Estimation Engine",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "build": "echo \"No frontend build in backend package\""
-    
+    "dev": "nodemon server.js"
   },
   "keywords": [
     "nodejs",
@@ -32,7 +15,6 @@
     "estimation",
     "backend"
   ],
-  "author": "",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^3.0.3",
