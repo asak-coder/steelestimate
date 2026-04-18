@@ -1,25 +1,36 @@
-const helmet = require('helmet');
-const mongoSanitize = require('express-mongo-sanitize');
-const xssClean = require('xss-clean');
-const cors = require('cors');
+const helmet = require("helmet");
+const cors = require("cors");
+
+let mongoSanitize = null;
+try {
+  mongoSanitize = require("express-mongo-sanitize");
+} catch (error) {
+  mongoSanitize = null;
+}
+
+let xssClean = null;
+try {
+  xssClean = require("xss-clean");
+} catch (error) {
+  xssClean = null;
+}
 
 function normalizeOrigin(origin) {
-  return String(origin || '').trim().replace(/\/$/, '');
+  return String(origin || "").trim().replace(/\/$/, "");
 }
 
 function parseOrigins(value) {
-  return String(value || '')
-    .split(',')
+  return String(value || "")
+    .split(",")
     .map(normalizeOrigin)
     .filter(Boolean);
 }
 
-const defaultCorsOrigins = ['https://steelestimate.vercel.app'];
-const envOrigins = parseOrigins(
-  process.env.CORS_ORIGIN || process.env.FRONTEND_URL || process.env.ADMIN_FRONTEND_URL || ''
+const frontendUrl = normalizeOrigin(
+  process.env.FRONTEND_URL || process.env.ADMIN_FRONTEND_URL || "https://steelestimate.vercel.app"
 );
-
-const corsOrigins = [...new Set([...defaultCorsOrigins, ...envOrigins].map(normalizeOrigin))];
+const envOrigins = parseOrigins(process.env.CORS_ORIGIN || "");
+const corsOrigins = [...new Set([frontendUrl, ...envOrigins].map(normalizeOrigin))];
 
 const corsOptions = {
   origin(origin, callback) {
@@ -35,16 +46,25 @@ const corsOptions = {
     return callback(new Error(`Not allowed by CORS: ${requestOrigin}`), false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 };
 
 const securityMiddleware = [
-  helmet(),
-  mongoSanitize(),
-  xssClean(),
-  cors(corsOptions)
+  helmet({
+    contentSecurityPolicy: false
+  })
 ];
+
+if (typeof mongoSanitize === "function") {
+  securityMiddleware.push(mongoSanitize());
+}
+
+if (typeof xssClean === "function") {
+  securityMiddleware.push(xssClean());
+}
+
+securityMiddleware.push(cors(corsOptions));
 
 module.exports = {
   securityMiddleware,

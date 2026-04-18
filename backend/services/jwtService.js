@@ -1,27 +1,37 @@
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
 const getJwtConfig = () => ({
   secret: process.env.JWT_SECRET,
-  expiresIn: process.env.JWT_EXPIRES_IN || '8h'
+  expiresIn: process.env.JWT_EXPIRES_IN || "8h",
+  issuer: process.env.JWT_ISSUER || "steelestimate-api",
+  audience: process.env.JWT_AUDIENCE || "steelestimate-admin"
 });
 
-const signToken = (payload) => {
-  const { secret, expiresIn } = getJwtConfig();
+const signToken = (payload, options = {}) => {
+  const { secret, expiresIn, issuer, audience } = getJwtConfig();
 
   return jwt.sign(payload, secret, {
-    expiresIn
+    expiresIn,
+    issuer,
+    audience,
+    ...options
   });
 };
 
-const signAdminToken = (payload) => {
-  return signToken(payload);
-};
+const signAdminToken = (payload) => signToken(payload, { subject: payload.id });
+const signUserToken = (payload) => signToken(payload, { subject: payload.id });
 
-const signUserToken = (payload) => {
-  return signToken(payload);
+const verifyToken = (token) => {
+  const { secret, issuer, audience } = getJwtConfig();
+
+  return jwt.verify(token, secret, {
+    issuer,
+    audience
+  });
 };
 
 module.exports = {
   signAdminToken,
-  signUserToken
+  signUserToken,
+  verifyToken
 };

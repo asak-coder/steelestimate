@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import LeadDetailsPanel from '../../../../components/LeadDetailsPanel';
-import { getLeadById, updateLeadStatus } from '../../../../lib/api';
+import { getLeadById, updateLeadNotes, updateLeadStatus } from '../../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,23 +49,39 @@ export default async function LeadDetailsPage({ params }) {
           <div className="space-y-6">
             <LeadDetailsPanel lead={lead} />
 
-            <form action={handleStatusUpdate} className="rounded-2xl border border-[var(--border)] bg-[rgba(17,24,39,0.88)] p-6 shadow-glow">
+            <div className="rounded-2xl border border-[var(--border)] bg-[rgba(17,24,39,0.88)] p-6 shadow-glow">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <label className="flex w-full max-w-sm flex-col gap-2 text-sm text-white">
                   Update status
                   <select name="status" defaultValue={lead.status || 'new'} className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none">
                     <option value="new">New</option>
+                    <option value="hot">Hot</option>
+                    <option value="warm">Warm</option>
+                    <option value="cold">Cold</option>
                     <option value="qualified">Qualified</option>
                     <option value="follow-up">Follow-up</option>
                     <option value="won">Won</option>
                     <option value="lost">Lost</option>
                   </select>
                 </label>
-                <button type="submit" className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300">
+                <button type="submit" formAction={handleStatusUpdate} className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300">
                   Update status
                 </button>
               </div>
-            </form>
+
+              <form className="mt-6 space-y-4" action={async (formData) => {
+                'use server';
+                await updateLeadNotes(params.id, formData.get('notes'));
+              }}>
+                <label className="flex flex-col gap-2 text-sm text-white">
+                  Notes
+                  <textarea name="notes" defaultValue={lead.notes || ''} className="min-h-32 rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" />
+                </label>
+                <button type="submit" className="rounded-xl border border-[var(--border)] bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10">
+                  Save notes
+                </button>
+              </form>
+            </div>
           </div>
         ) : (
           <div className="rounded-2xl border border-[var(--border)] bg-[rgba(17,24,39,0.88)] p-6 text-sm text-[var(--muted)] shadow-glow">

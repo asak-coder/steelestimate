@@ -1,43 +1,67 @@
-const User = require('../models/User');
-const AppError = require('../utils/appError');
-const { signUserToken } = require('../services/jwtService');
+const User = require("../models/User");
+const AppError = require("../utils/appError");
+const { signAdminToken, signUserToken } = require("../services/jwtService");
 
-const createAuthResponse = (user) => {
-  const tokenPayload = {
-    id: user._id.toString(),
-    role: user.role
-  };
+const isPrivilegedRole = (role) => ["ADMIN", "MANAGER"].includes(String(role || "").toUpperCase());
 
-  return {
-    success: true,
-    token: signUserToken(tokenPayload),
-    user: user.toSafeObject()
-  };
+const cookieOptions = () => ({
+  httpOnly: true,
+  secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: 8 * 60 * 60 * 1000
+});
+
+const createAuthResponse = (user) => ({
+  success: true,
+  user: user.toSafeObject()
+});
+
+const setAuthCookie = (res, user) => {
+  const token = isPrivilegedRole(user.role)
+    ? signAdminToken({ id: user._id.toString(), role: user.role })
+    : signUserToken({ id: user._id.toString(), role: user.role });
+
+  res.cookie("authToken", token, cookieOptions());
 };
 
-const signup = async (req, res, next) => {
+const clearAuthCookie = (res) => {
+  res.clearCookie("authToken", {
+    httpOnly: true,
+    secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
+    sameSite: "lax",
+    path: "/"
+  });
+};
+
+const register = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
+    const normalizedEmail = email?.toLowerCase().trim();
 
-    const existingUser = await User.findOne({ email: email?.toLowerCase() });
-    if (existingUser) {
-      throw new AppError('User already exists with this email', 409);
+    if (!normalizedEmail || !password || !name) {
+      throw new AppError("Name, email and password are required", 400);
     }
 
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      throw new AppError("User already exists with this email", 409);
+    }
+
+    const allowedRole = isPrivilegedRole(role) ? String(role).toUpperCase() : "VIEWER";
     const user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password,
-      role: role === 'admin' ? 'admin' : 'user',
-      subscription: {
-        plan: 'free',
-        premium: false,
-        status: 'inactive',
-        payment: {}
-      }
+      role: allowedRole
     });
 
-    return res.status(201).json(createAuthResponse(user));
+    setAuthCookie(res, user);
+
+    return res.status(201).json({
+      success: true,
+      user: user.toSafeObject()
+    });
   } catch (error) {
     return next(error);
   }
@@ -46,16 +70,23 @@ const signup = async (req, res, next) => {
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = email?.toLowerCase().trim();
 
-    const user = await User.findOne({ email: email?.toLowerCase() }).select('+password');
+    if (!normalizedEmail || !password) {
+      throw new AppError("Email and password are required", 400);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select("+password");
     if (!user) {
-      throw new AppError('Invalid email or password', 401);
+      throw new AppError("Invalid email or password", 401);
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      throw new AppError('Invalid email or password', 401);
+      throw new AppError("Invalid email or password", 401);
     }
+
+    setAuthCookie(res, user);
 
     return res.status(200).json(createAuthResponse(user));
   } catch (error) {
@@ -63,15 +94,23 @@ const login = async (req, res, next) => {
   }
 };
 
+const logout = async (req, res) => {
+  clearAuthCookie(res);
+  return res.status(200).json({
+    success: true,
+    message: "Logged out successfully"
+  });
+};
+
 const getMe = async (req, res, next) => {
   try {
     if (!req.user?.id) {
-      throw new AppError('Authentication required', 401);
+      throw new AppError("Authentication required", 401);
     }
 
     const user = await User.findById(req.user.id);
     if (!user) {
-      throw new AppError('User not found', 404);
+      throw new AppError("User not found", 404);
     }
 
     return res.status(200).json({
@@ -84,7 +123,9 @@ const getMe = async (req, res, next) => {
 };
 
 module.exports = {
-  signup,
+  register,
+  signup: register,
   login,
+  logout,
   getMe
 };
