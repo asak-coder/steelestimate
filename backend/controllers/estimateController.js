@@ -82,6 +82,39 @@ const getEstimateById = async (req, res, next) => {
   }
 };
 
+const getEstimatesHistory = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+
+    const filter = {};
+    if (req.user?.role !== 'admin' && req.user?.id) {
+      filter.userId = req.user.id;
+    }
+
+    const [total, items] = await Promise.all([
+      Estimate.countDocuments(filter),
+      Estimate.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit)
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        items,
+        page,
+        limit,
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const generateEstimatePdf = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -162,6 +195,7 @@ const convertEstimateToLead = async (req, res, next) => {
 module.exports = {
   createEstimate,
   getEstimateById,
+  getEstimatesHistory,
   generateEstimatePdf,
   convertEstimateToLead
 };

@@ -25,11 +25,6 @@ function notifyAuthChange() {
 
 function clearClientSession() {
   if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem('steelestimate_token');
-  } catch (error) {
-    // Ignore storage failures and continue with redirect fallback.
-  }
   notifyAuthChange();
 }
 
@@ -71,6 +66,28 @@ async function request(path, options = {}) {
   }
 
   return data;
+}
+
+export async function getPlans() {
+  return request('/api/plans');
+}
+
+export async function getMe() {
+  return request('/api/auth/me');
+}
+
+export async function createPaymentOrder(planId) {
+  return request('/api/payments/orders', {
+    method: 'POST',
+    body: JSON.stringify({ planId }),
+  });
+}
+
+export async function verifyPayment(payload) {
+  return request('/api/payments/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getLeads(params = {}) {
@@ -134,5 +151,49 @@ export async function register(email, password, name, role) {
   return request('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password, name, role }),
+  });
+}
+
+export async function runOrchestrator(payload) {
+  return request('/api/orchestrator/run', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getEstimates() {
+  return request('/api/estimates');
+}
+
+export async function getAnalyticsSummary(params = {}) {
+  const query = new URLSearchParams();
+
+  if (params.projectType) query.set('projectType', params.projectType);
+  if (params.clientType) query.set('clientType', params.clientType);
+  if (params.region) query.set('region', params.region);
+  if (params.fromDate) query.set('fromDate', params.fromDate);
+  if (params.toDate) query.set('toDate', params.toDate);
+
+  const path = query.toString() ? `/api/analytics/summary?${query.toString()}` : '/api/analytics/summary';
+  return request(path);
+}
+
+export async function getLearningInsights(params = {}) {
+  const query = new URLSearchParams();
+
+  if (params.projectType) query.set('projectType', params.projectType);
+  if (params.clientType) query.set('clientType', params.clientType);
+  if (params.region) query.set('region', params.region);
+  if (params.fromDate) query.set('fromDate', params.fromDate);
+  if (params.toDate) query.set('toDate', params.toDate);
+
+  const path = query.toString() ? `/api/analytics/learning-insights?${query.toString()}` : '/api/analytics/learning-insights';
+  return request(path);
+}
+
+export async function generateEstimatePdf(estimateId) {
+  return request('/api/estimate/generate-pdf', {
+    method: 'POST',
+    body: JSON.stringify({ estimateId }),
   });
 }

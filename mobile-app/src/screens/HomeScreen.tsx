@@ -24,8 +24,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.kicker}>EPC Lead Management</Text>
           <Text style={styles.title}>A K ENGINEERING</Text>
           <Text style={styles.subtitle}>
-            Industrial lead tracking, quoting, and dashboard operations built
-            for fast site workflows.
+            Industrial lead tracking, structured estimate capture, and hybrid
+            quotation summaries built for fast site workflows.
           </Text>
 
           <View style={styles.metricRow}>
@@ -34,8 +34,8 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.metricValue}>Launch</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>Clean</Text>
-              <Text style={styles.metricValue}>UI</Text>
+              <Text style={styles.metricLabel}>Hybrid</Text>
+              <Text style={styles.metricValue}>Estimate</Text>
             </View>
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Tablet</Text>
@@ -47,6 +47,10 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             <Button
               title="Create Lead"
               onPress={() => navigation.navigate('LeadForm')}
+            />
+            <Button
+              title="Run Estimate"
+              onPress={() => navigation.navigate('Estimate')}
             />
             <Button
               title="View Dashboard"

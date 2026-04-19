@@ -40,27 +40,60 @@ const sanitizeLead = (lead) => ({
   createdAt: lead.createdAt
 });
 
+const normalizeLeadQuery = (query = {}) => {
+  const normalized = { ...query };
+
+  if (normalized.status) {
+    const rawStatus = String(normalized.status).trim();
+    const upperStatus = rawStatus.toUpperCase();
+
+    if (allowedStatuses.includes(upperStatus)) {
+      normalized.status = upperStatus;
+    } else if (legacyStatusMap[rawStatus.toLowerCase()]) {
+      normalized.status = legacyStatusMap[rawStatus.toLowerCase()];
+    }
+  }
+
+  if (normalized.score !== undefined && normalized.score !== '') {
+    const scoreValue = Number(normalized.score);
+    if (Number.isFinite(scoreValue)) {
+      normalized.score = scoreValue;
+    }
+  }
+
+  if (normalized.from) {
+    const fromDate = new Date(normalized.from);
+    if (!Number.isNaN(fromDate.getTime())) {
+      normalized.createdAt = { ...(normalized.createdAt || {}), $gte: fromDate };
+    }
+    delete normalized.from;
+  }
+
+  if (normalized.to) {
+    const toDate = new Date(normalized.to);
+    if (!Number.isNaN(toDate.getTime())) {
+      normalized.createdAt = { ...(normalized.createdAt || {}), $lte: toDate };
+    }
+    delete normalized.to;
+  }
+
+  if (normalized.search) {
+    const searchRegex = new RegExp(String(normalized.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    normalized.$or = [
+      { clientName: searchRegex },
+      { company: searchRegex },
+      { email: searchRegex },
+      { phone: searchRegex }
+    ];
+  }
+
+  return normalized;
+};
+
 const getLeads = async (req, res, next) => {
   try {
-    const userFilter = req.user?.role === 'admin' ? {} : { userId: req.user.id };
-    const { status, search } = req.query;
-    const query = { ...userFilter };
-
-    if (status) {
-      const normalizedStatus = String(status).toUpperCase();
-      if (!allowedStatuses.includes(normalizedStatus)) {
-        throw new AppError('Invalid status filter', 400);
-      }
-      query.status = normalizedStatus;
-    }
-
-    if (search) {
-      const searchRegex = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      query.$or = [
-        { clientName: searchRegex },
-        { company: searchRegex }
-      ];
-    }
+    const userFilter = req.user?.role === 'ADMIN' ? {} : { userId: req.user.id };
+    const query = normalizeLeadQuery({ ...userFilter, ...req.query });
 
     const leads = await Lead.find(query).sort({ createdAt: -1 });
 
@@ -68,6 +101,25 @@ const getLeads = async (req, res, next) => {
       success: true,
       count: leads.length,
       data: leads.map(sanitizeLead)
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createLead = async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    const lead = await Lead.create({
+      ...payload,
+      userId: req.user?.id || payload.userId || null,
+      status: payload.status ? String(payload.status).toUpperCase() : 'NEW'
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Lead created successfully',
+      data: sanitizeLead(lead)
     });
   } catch (error) {
     return next(error);
@@ -88,7 +140,7 @@ const getLeadById = async (req, res, next) => {
       throw new AppError('Lead not found', 404);
     }
 
-    if (req.user?.role !== 'admin' && lead.userId.toString() !== req.user.id) {
+    if (req.user?.role !== 'ADMIN' && lead.userId.toString() !== req.user.id) {
       throw new AppError('Not authorized to access this lead', 403);
     }
 
@@ -123,7 +175,7 @@ const updateLeadStatus = async (req, res, next) => {
       throw new AppError('Lead not found', 404);
     }
 
-    if (req.user?.role !== 'admin' && lead.userId.toString() !== req.user.id) {
+    if (req.user?.role !== 'ADMIN' && lead.userId.toString() !== req.user.id) {
       throw new AppError('Not authorized to update this lead', 403);
     }
 
@@ -166,7 +218,7 @@ const updateLeadScoring = async (req, res, next) => {
       throw new AppError('Lead not found', 404);
     }
 
-    if (req.user?.role !== 'admin' && lead.userId.toString() !== req.user.id) {
+    if (req.user?.role !== 'ADMIN' && lead.userId.toString() !== req.user.id) {
       throw new AppError('Not authorized to update this lead', 403);
     }
 
@@ -295,6 +347,7 @@ const getAdminStats = async (req, res, next) => {
 
 module.exports = {
   getLeads,
+  createLead,
   getLeadById,
   updateLeadStatus,
   updateLeadScoring,

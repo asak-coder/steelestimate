@@ -12,7 +12,7 @@ const {
 
 const { leadStatusSchema } = require("../validators/leadValidator");
 const { validate } = require("../middleware/validation");
-const { requireAuth, requireAdmin, requireAdminOrManager, requireViewer } = require("../middleware/auth");
+const { requireAuth, requireAdmin, requireAdminOrManager } = require("../middleware/auth");
 const { adminLimiter, sensitiveLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
@@ -22,10 +22,10 @@ router.use(requireAuth);
 router.post("/", requireAdminOrManager, sensitiveLimiter, createLead);
 
 router.get("/admin/stats", requireAdmin, adminLimiter, getAdminStats);
-router.get("/dashboard", requireViewer, sensitiveLimiter, getDashboard);
-router.get("/history", requireViewer, sensitiveLimiter, getHistory);
-router.get("/", requireViewer, sensitiveLimiter, getLeads);
-router.get("/:id", requireViewer, sensitiveLimiter, getLeadById);
+router.get("/dashboard", sensitiveLimiter, getDashboard);
+router.get("/history", sensitiveLimiter, getHistory);
+router.get("/", sensitiveLimiter, getLeads);
+router.get("/:id", sensitiveLimiter, getLeadById);
 
 router.patch("/:id", requireAdminOrManager, sensitiveLimiter, validate(leadStatusSchema), updateLeadStatus);
 router.put("/:id", requireAdminOrManager, sensitiveLimiter, validate(leadStatusSchema), updateLeadStatus);

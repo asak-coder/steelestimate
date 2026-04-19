@@ -4,12 +4,14 @@ import HomeScreen from '../screens/HomeScreen';
 import LeadFormScreen from '../screens/LeadFormScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import EditLeadScreen from '../screens/EditLeadScreen';
+import EstimateScreen from '../screens/EstimateScreen';
 import { theme } from '../theme/theme';
 import { Lead } from '../services/api';
 
 export type RootStackParamList = {
   Home: undefined;
   LeadForm: undefined;
+  Estimate: undefined;
   Dashboard: undefined;
   EditLead: { leadId: string; lead?: Lead };
 };
@@ -32,6 +34,11 @@ const AppNavigator = () => {
         name="LeadForm"
         component={LeadFormScreen}
         options={{ title: 'Create Lead' }}
+      />
+      <Stack.Screen
+        name="Estimate"
+        component={EstimateScreen}
+        options={{ title: 'Estimate' }}
       />
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen

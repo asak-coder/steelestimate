@@ -1,4 +1,9 @@
-const OpenAI = require('openai');
+let OpenAI;
+try {
+    OpenAI = require('openai');
+} catch (error) {
+    OpenAI = null;
+}
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -104,7 +109,7 @@ const parseAiResponse = (text) => {
     return null;
 };
 
-const normalizeAiResult = ({ baseCost, projectSize, location, responseText, fallback }) => {
+const normalizeAiResult = ({ responseText, fallback }) => {
     const parsed = parseAiResponse(responseText);
 
     if (!parsed) {
@@ -146,7 +151,7 @@ const optimizePricing = async ({ baseCost, projectSize, location }) => {
 
     const apiKey = process.env.OPENAI_API_KEY;
 
-    if (!apiKey) {
+    if (!apiKey || !OpenAI) {
         return fallback;
     }
 
@@ -175,9 +180,6 @@ const optimizePricing = async ({ baseCost, projectSize, location }) => {
         const responseText = response.output_text ? response.output_text.trim() : '';
 
         return normalizeAiResult({
-            baseCost: normalizedBaseCost,
-            projectSize: normalizedProjectSize,
-            location: normalizedLocation,
             responseText,
             fallback
         });
@@ -186,6 +188,177 @@ const optimizePricing = async ({ baseCost, projectSize, location }) => {
     }
 };
 
+const normalizeRateEntries = (entries) => {
+    if (!Array.isArray(entries)) {
+        return [];
+    }
+
+    return entries
+        .map((entry) => {
+            if (typeof entry === 'number') {
+                return { rate: entry, outcome: null };
+            }
+
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+
+            const rate = Number(entry.rate ?? entry.value ?? entry.amount ?? entry.actualRate ?? entry.historicalRate);
+            if (!Number.isFinite(rate)) {
+                return null;
+            }
+
+            return {
+                rate,
+                outcome: String(entry.outcome || entry.projectOutcome || entry.result || '').toLowerCase(),
+                margin: Number(entry.margin ?? entry.actualMargin ?? entry.profitMargin),
+                loss: Number(entry.loss ?? entry.lossAmount ?? 0),
+                projectType: String(entry.projectType || '').toLowerCase()
+            };
+        })
+        .filter(Boolean);
+};
+
+const normalizeTrend = (marketTrend) => {
+    const raw = String(marketTrend || '').trim().toLowerCase();
+
+    if (!raw) {
+        return 'stable';
+    }
+
+    if (/(bull|rising|increasing|up|strong|tight)/.test(raw)) {
+        return 'rising';
+    }
+
+    if (/(bear|falling|decreasing|down|soft|weak)/.test(raw)) {
+        return 'falling';
+    }
+
+    return 'stable';
+};
+
+const calculateRateIntelligence = ({ rateType, historicalRates, projectOutcomes, marketTrend }) => {
+    const normalizedRateType = String(rateType || 'rate').trim() || 'rate';
+    const trend = normalizeTrend(marketTrend);
+    const rates = normalizeRateEntries(historicalRates);
+    const outcomes = Array.isArray(projectOutcomes) ? projectOutcomes : [];
+
+    if (!rates.length) {
+        return {
+            recommendedRateRange: { min: 0, max: 0 },
+            adjustmentReason: `No historical ${normalizedRateType} data available. Use conservative pricing controls until outcome history is captured.`,
+            riskLevel: 'high'
+        };
+    }
+
+    const numericRates = rates.map((entry) => entry.rate).filter((value) => Number.isFinite(value) && value > 0);
+    const sortedRates = numericRates.slice().sort((a, b) => a - b);
+
+    const outcomeRows = outcomes
+        .map((entry) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+
+            const rate = Number(entry.rate ?? entry.value ?? entry.amount ?? entry.actualRate ?? entry.historicalRate);
+            if (!Number.isFinite(rate)) {
+                return null;
+            }
+
+            return {
+                rate,
+                projectOutcome: String(entry.projectOutcome || entry.outcome || '').toLowerCase(),
+                margin: Number(entry.margin ?? entry.actualMargin ?? entry.profitMargin),
+                loss: Number(entry.loss ?? entry.lossAmount ?? 0)
+            };
+        })
+        .filter(Boolean);
+
+    const losses = outcomeRows.filter((entry) => /(loss|failed|unprofitable|bad)/.test(entry.projectOutcome));
+    const wins = outcomeRows.filter((entry) => /(win|profit|successful|good|safe)/.test(entry.projectOutcome));
+
+    const avgRate = numericRates.reduce((sum, value) => sum + value, 0) / numericRates.length;
+    const medianRate = sortedRates[Math.floor(sortedRates.length / 2)] || avgRate;
+    const minRate = sortedRates[0];
+    const maxRate = sortedRates[sortedRates.length - 1];
+    const spread = maxRate - minRate;
+    const volatility = avgRate ? spread / avgRate : 0;
+
+    const lossRates = losses.map((entry) => entry.rate).filter((value) => Number.isFinite(value) && value > 0);
+    const winRates = wins.map((entry) => entry.rate).filter((value) => Number.isFinite(value) && value > 0);
+
+    const avgLossRate = lossRates.length
+        ? lossRates.reduce((sum, value) => sum + value, 0) / lossRates.length
+        : null;
+    const avgWinRate = winRates.length
+        ? winRates.reduce((sum, value) => sum + value, 0) / winRates.length
+        : null;
+
+    let baseRecommendation = medianRate;
+
+    if (Number.isFinite(avgLossRate) && Number.isFinite(avgWinRate)) {
+        baseRecommendation = (avgLossRate + avgWinRate) / 2;
+    } else if (Number.isFinite(avgLossRate)) {
+        baseRecommendation = avgLossRate;
+    } else if (Number.isFinite(avgWinRate)) {
+        baseRecommendation = avgWinRate;
+    }
+
+    const trendAdjustment = trend === 'rising' ? 0.03 : trend === 'falling' ? -0.03 : 0;
+    const performanceAdjustment = losses.length > wins.length ? 0.02 : wins.length > losses.length ? -0.01 : 0;
+    const volatilityBuffer = Math.min(0.08, Math.max(0.02, volatility * 0.35));
+    const safeFloor = Number.isFinite(minRate) ? minRate : baseRecommendation * 0.9;
+    const safeCeiling = Number.isFinite(maxRate) ? maxRate : baseRecommendation * 1.1;
+
+    const adjustedTarget = baseRecommendation * (1 + trendAdjustment + performanceAdjustment);
+    const recommendedCenter = Math.max(safeFloor, adjustedTarget);
+    const rangeMin = roundToTwo(Math.max(safeFloor, recommendedCenter * (1 - volatilityBuffer)));
+    const rangeMax = roundToTwo(Math.max(rangeMin, Math.min(safeCeiling * (1 + volatilityBuffer / 2), recommendedCenter * (1 + volatilityBuffer))));
+
+    const lossPressure = losses.length ? `Historical ${normalizedRateType} losses occurred in ${losses.length} of ${outcomeRows.length || losses.length} tracked outcomes.` : `No loss-heavy outcomes were present in the tracked ${normalizedRateType} history.`;
+    const trendText = trend === 'rising'
+        ? 'Market trend is rising, so the recommendation follows the market with a controlled uplift.'
+        : trend === 'falling'
+            ? 'Market trend is softening, so the recommendation stays disciplined and avoids aggressive pricing.'
+            : 'Market trend is stable, so the recommendation remains anchored to historical safe rates.';
+
+    const volatilityText = volatility >= 0.2
+        ? 'High rate volatility requires a wider safety buffer to avoid underpricing during execution risk.'
+        : volatility >= 0.1
+            ? 'Moderate volatility justifies a measured buffer to protect margin without losing competitiveness.'
+            : 'Low volatility allows a tighter band around the safe historical rate range.';
+
+    const riskLevel = (() => {
+        if (volatility >= 0.2 || losses.length > wins.length * 1.5) {
+            return 'high';
+        }
+
+        if (volatility >= 0.1 || losses.length >= wins.length) {
+            return 'medium';
+        }
+
+        return 'low';
+    })();
+
+    const adjustmentReason = [
+        `Historical ${normalizedRateType} data centers around ${roundToTwo(baseRecommendation)} with a safe band from ${roundToTwo(safeFloor)} to ${roundToTwo(safeCeiling)}.`,
+        lossPressure,
+        trendText,
+        volatilityText,
+        `A volatility buffer of ${roundToTwo(volatilityBuffer * 100)}% has been applied to keep the range conservative and avoid aggressive underpricing.`
+    ].join(' ');
+
+    return {
+        recommendedRateRange: {
+            min: rangeMin,
+            max: rangeMax
+        },
+        adjustmentReason,
+        riskLevel
+    };
+};
+
 module.exports = {
-    optimizePricing
+    optimizePricing,
+    calculateRateIntelligence
 };

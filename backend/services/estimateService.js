@@ -1,8 +1,9 @@
 const Estimate = require('../models/Estimate');
+const LearningData = require('../models/LearningData');
 const { generateQuotationPdf } = require('./pdfService');
 const { calculatePebEstimate } = require('./calculations/pebCalc');
 
-const roundToTwo = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const roundToTwo = (value) => Math.round(Number(value || 0) * 100) / 100;
 
 function buildPEBAssumptions(inputs, results = {}) {
   const assumptions = [
@@ -74,7 +75,68 @@ function normalizeEstimateInputs(projectType, inputs) {
   return safeInputs;
 }
 
-async function createEstimateRecord({ userId, projectType, inputs, source = 'api' }) {
+function buildLearningSnapshot({ finalAmount, cost, commercial, input }) {
+  const winProbability = commercial?.riskScore != null ? Math.max(0, Math.min(100, 100 - Number(commercial.riskScore))) : null;
+
+  return {
+    estimatedAmount: finalAmount || null,
+    estimatedCost: cost?.totalCost ?? cost?.finalAmount ?? null,
+    estimatedMargin: commercial?.suggestedMargin ?? null,
+    winProbability,
+    riskLevel: commercial?.riskLevel || 'medium',
+    strategy: commercial?.pricingStrategy || '',
+    source: 'orchestrator',
+    projectType: input?.projectType || 'peb',
+    clientType: input?.clientType || '',
+    metadata: {
+      pricingStrategy: commercial?.pricingStrategy || '',
+      commercialSummary: commercial?.commercialSummary || '',
+      recommendedPrice: commercial?.recommendedPrice ?? null
+    }
+  };
+}
+
+async function persistLearningData(estimate, payload = {}) {
+  if (!estimate?._id) {
+    return null;
+  }
+
+  try {
+    const existing = await LearningData.findOne({ estimateId: estimate._id });
+    const data = {
+      estimateId: estimate._id,
+      userId: estimate.userId,
+      leadId: estimate.leadId || null,
+      projectType: estimate.projectType,
+      clientType: estimate.clientType || '',
+      estimatedAmount: estimate.results?.finalAmount ?? payload.finalAmount ?? null,
+      estimatedCost: estimate.results?.cost?.finalAmount ?? estimate.results?.cost?.totalCost ?? null,
+      estimatedMargin: estimate.aiSuggestions?.suggestedMargin ?? null,
+      winProbability: estimate.results?.winProbability ?? null,
+      riskLevel: estimate.results?.riskLevel || '',
+      strategy: estimate.results?.strategy || '',
+      aiSuggestion: estimate.aiSuggestions || {},
+      actualOutcome: estimate.actualOutcome || {},
+      tags: Array.isArray(estimate.tags) ? estimate.tags : [],
+      source: estimate.source || 'api',
+      metadata: {
+        orchestratorMetadata: estimate.calculationMeta || {},
+        payload
+      }
+    };
+
+    if (existing) {
+      Object.assign(existing, data);
+      return existing.save();
+    }
+
+    return LearningData.create(data);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function createEstimateRecord({ userId, projectType, inputs, source = 'api', orchestratorPayload = null }) {
   const normalizedProjectType = typeof projectType === 'string' && projectType.trim() ? projectType.trim().toLowerCase() : 'peb';
   const normalizedInputs = normalizeEstimateInputs(normalizedProjectType, inputs);
 
@@ -103,6 +165,7 @@ async function createEstimateRecord({ userId, projectType, inputs, source = 'api
   const estimate = await Estimate.create({
     userId,
     projectType: normalizedProjectType,
+    clientType: normalizedInputs.clientType || '',
     inputs: estimatePayload.inputs,
     assumptions: estimatePayload.assumptions,
     results: {
@@ -110,7 +173,26 @@ async function createEstimateRecord({ userId, projectType, inputs, source = 'api
       source
     },
     warnings: estimatePayload.warnings,
-    meta: estimatePayload.meta
+    calculationMeta: estimatePayload.meta,
+    source
+  });
+
+  if (orchestratorPayload && typeof estimate.applyOrchestratorPayload === 'function') {
+    estimate.applyOrchestratorPayload(orchestratorPayload);
+    await estimate.save();
+    await persistLearningData(estimate, orchestratorPayload);
+  }
+
+  return estimate;
+}
+
+async function storeOrchestratorOutput({ userId, projectType, inputs, orchestratorPayload, source = 'orchestrator' }) {
+  const estimate = await createEstimateRecord({
+    userId,
+    projectType,
+    inputs,
+    source,
+    orchestratorPayload
   });
 
   return estimate;
@@ -136,19 +218,27 @@ async function generateEstimatePdfBuffer(estimate) {
       craneCapacity: estimate.inputs?.craneCapacity
     },
     calc: {
-      areaSqm: (Number(estimate.inputs?.geometry?.length || estimate.inputs?.length || 0) * Number(estimate.inputs?.geometry?.width || estimate.inputs?.width || 0)),
-      areaSqft: (Number(estimate.inputs?.geometry?.length || estimate.inputs?.length || 0) * Number(estimate.inputs?.geometry?.width || estimate.inputs?.width || 0)) * 10.7639,
-      steelRatePerSqm: estimate.results?.steelWeight ? roundToTwo(estimate.results.steelWeight / Math.max((Number(estimate.inputs?.geometry?.length || estimate.inputs?.length || 1) * Number(estimate.inputs?.geometry?.width || estimate.inputs?.width || 1)), 1)) : 0,
+      areaSqm: Number(estimate.inputs?.geometry?.length || estimate.inputs?.length || 0) * Number(estimate.inputs?.geometry?.width || estimate.inputs?.width || 0),
+      areaSqft: Number(estimate.inputs?.geometry?.length || estimate.inputs?.length || 0) * Number(estimate.inputs?.geometry?.width || estimate.inputs?.width || 0) * 10.7639,
+      steelRatePerSqm: estimate.results?.steelWeight ? roundToTwo(estimate.results.steelWeight / Math.max(Number(estimate.inputs?.geometry?.length || estimate.inputs?.length || 1) * Number(estimate.inputs?.geometry?.width || estimate.inputs?.width || 1), 1)) : 0,
       estimatedSteelWeightKg: estimate.results?.steelWeight || 0
     },
     boq: estimate.results?.boq || {},
     cost: estimate.results?.cost || {},
-    quotationText: estimate.results?.quotationText || estimate.quotationText || ''
+    quotationText: estimate.quotationText || estimate.results?.quotationText || '',
+    aiSuggestions: estimate.aiSuggestions || {},
+    actualOutcome: estimate.actualOutcome || {},
+    strategy: estimate.results?.strategy || '',
+    winProbability: estimate.results?.winProbability ?? null
   });
 }
 
 module.exports = {
   createEstimateRecord,
+  storeOrchestratorOutput,
   fetchEstimateById,
-  generateEstimatePdfBuffer
+  generateEstimatePdfBuffer,
+  buildPEBAssumptions,
+  buildPEBWarnings,
+  normalizeEstimateInputs
 };

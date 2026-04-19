@@ -38,7 +38,7 @@ function buildUrl(path: string): string {
   return `${base}${normalizedPath}`;
 }
 
-function createTimeoutSignal(timeoutMs: number): AbortController {
+function createTimeoutController(timeoutMs: number): AbortController {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), timeoutMs);
   return controller;
@@ -80,13 +80,14 @@ export async function apiRequest<T>(
   init: RequestInit = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
-  const controller = createTimeoutSignal(timeoutMs);
+  const controller = createTimeoutController(timeoutMs);
   const signal = init.signal ?? controller.signal;
 
   try {
     const response = await fetch(buildUrl(path), {
       ...init,
       signal,
+      credentials: 'include',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',

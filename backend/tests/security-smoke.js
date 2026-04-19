@@ -1,4 +1,5 @@
 const assert = require("assert");
+const { calculateRateIntelligence } = require("../services/pricingOptimizationService");
 const path = require("path");
 const fs = require("fs");
 
@@ -40,6 +41,25 @@ function main() {
   assert(!loginPage.includes("setAuthToken"), "login page should not store tokens");
   assert(!authGuard.includes("getStoredToken"), "auth guard should not use localStorage tokens");
   assert(!authGuard.includes("Authorization"), "auth guard should not rely on Authorization headers");
+
+  const rateCheck = calculateRateIntelligence({
+    rateType: "fabrication",
+    historicalRates: [
+      { rate: 100, outcome: "safe" },
+      { rate: 95, outcome: "loss" },
+      { rate: 110, outcome: "profit" }
+    ],
+    projectOutcomes: [
+      { rate: 100, projectOutcome: "safe" },
+      { rate: 95, projectOutcome: "loss" },
+      { rate: 110, projectOutcome: "profit" }
+    ],
+    marketTrend: "stable"
+  });
+
+  assert(rateCheck && rateCheck.recommendedRateRange, "rate intelligence should return a recommended range");
+  assert(typeof rateCheck.recommendedRateRange.min === "number", "rate intelligence min should be numeric");
+  assert(typeof rateCheck.recommendedRateRange.max === "number", "rate intelligence max should be numeric");
 
   console.log("Security smoke checks passed.");
 }

@@ -11,7 +11,6 @@ import {
   Text,
   View,
   useWindowDimensions,
-  ViewStyle,
 } from 'react-native';
 import Button from '../components/Button';
 import InputField from '../components/InputField';

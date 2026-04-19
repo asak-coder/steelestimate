@@ -7,16 +7,17 @@ function notifyAuthChange() {
 
 function clearStoredToken() {
   if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem('steelestimate_token');
-  } catch (error) {
-    // Ignore storage failures. Cookie-based auth is authoritative.
-  }
   notifyAuthChange();
 }
 
 function hasValidSession() {
-  return true;
+  if (typeof window === 'undefined') return false;
+
+  return Boolean(
+    window.document.cookie.includes('authToken=') ||
+    window.localStorage.getItem('authToken') ||
+    window.sessionStorage.getItem('authToken')
+  );
 }
 
 function onAuthChange(callback) {
@@ -33,6 +34,10 @@ function onAuthChange(callback) {
 }
 
 function logout() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('authToken');
+    window.sessionStorage.removeItem('authToken');
+  }
   clearStoredToken();
   if (typeof window !== 'undefined') {
     window.location.replace('/admin/login');

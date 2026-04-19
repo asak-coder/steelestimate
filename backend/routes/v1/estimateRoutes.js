@@ -1,14 +1,11 @@
 const express = require('express');
-const { createEstimate, getEstimateById, generateEstimatePdf, convertEstimateToLead } = require('../../controllers/estimateController');
+const { calculateEstimate } = require('../../modules/estimation/controller');
 const { requireAuth } = require('../../middleware/auth');
+const { getEstimatesHistory } = require('../../controllers/estimateController');
 
 const router = express.Router();
 
-router.use(requireAuth);
-
-router.post('/', createEstimate);
-router.get('/:id', getEstimateById);
-router.get('/:id/pdf', generateEstimatePdf);
-router.post('/:id/leads', convertEstimateToLead);
+router.get('/', requireAuth, getEstimatesHistory);
+router.post('/calculate', requireAuth, calculateEstimate);
 
 module.exports = router;

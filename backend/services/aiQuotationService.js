@@ -1,4 +1,9 @@
-const OpenAI = require('openai');
+let OpenAI;
+try {
+    OpenAI = require('openai');
+} catch (error) {
+    OpenAI = null;
+}
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -36,7 +41,7 @@ const generateQuotationText = async ({ input, calc, boq, cost }) => {
     const fallbackQuotation = buildFallbackQuotation({ input, calc, boq, cost });
     const apiKey = process.env.OPENAI_API_KEY;
 
-    if (!apiKey) {
+    if (!apiKey || !OpenAI) {
         return fallbackQuotation;
     }
 

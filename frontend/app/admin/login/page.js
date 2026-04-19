@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { hasValidSession } from '../../../../lib/auth';
-import { login } from '../../../../lib/api';
+import { hasValidSession } from '../../../lib/auth';
+import { login } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
