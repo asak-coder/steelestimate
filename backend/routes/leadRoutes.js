@@ -17,9 +17,9 @@ const { adminLimiter, sensitiveLimiter } = require("../middleware/rateLimiters")
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.post("/", sensitiveLimiter, createLead);
 
-router.post("/", requireAdminOrManager, sensitiveLimiter, createLead);
+router.use(requireAuth);
 
 router.get("/admin/stats", requireAdmin, adminLimiter, getAdminStats);
 router.get("/dashboard", sensitiveLimiter, getDashboard);
