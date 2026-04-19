@@ -840,16 +840,14 @@ const getAdminSubscriptions = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  getLeads,
-  createLead,
-  getLeadById,
-  updateLeadStatus,
-  updateLeadScoring,
-  getHistory,
-  getAdminStats,
-  getAdminLeads,
-  getAdminUsers,
-  getAdminSubscriptions,
-  getDashboard
-};
+exports.getLeads = getLeads;
+exports.createLead = createLead;
+exports.getLeadById = getLeadById;
+exports.updateLeadStatus = updateLeadStatus;
+exports.updateLeadScoring = updateLeadScoring;
+exports.getHistory = getHistory;
+exports.getAdminStats = getAdminStats;
+exports.getAdminLeads = getAdminLeads;
+exports.getAdminUsers = getAdminUsers;
+exports.getAdminSubscriptions = getAdminSubscriptions;
+exports.getDashboard = getDashboard;
