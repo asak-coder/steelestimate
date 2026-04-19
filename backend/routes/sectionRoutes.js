@@ -5,7 +5,7 @@ const router = express.Router();
 
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-router.get('/sections', async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const sections = await Section.find({})
       .sort({ designation: 1, name: 1 })
@@ -20,7 +20,7 @@ router.get('/sections', async (req, res, next) => {
   }
 });
 
-router.get('/sections/:type', async (req, res, next) => {
+router.get('/:type', async (req, res, next) => {
   try {
     const type = String(req.params.type || '').trim();
 

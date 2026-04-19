@@ -52,8 +52,8 @@ export default function MsWeightPage() {
                 const weightPerMeter = Number(item?.weightPerMeter ?? item?.weight ?? 0);
                 return size ? ({ size, weightPerMeter } as StandardSection) : null;
               })
-              .filter((item): item is StandardSection => Boolean(item))
-              .sort((a, b) => a.size.localeCompare(b.size, undefined, { numeric: true }));
+              .filter((item: StandardSection | null): item is StandardSection => Boolean(item))
+              .sort((a: StandardSection, b: StandardSection) => a.size.localeCompare(b.size, undefined, { numeric: true }));
 
             return [key, normalized] as const;
           })

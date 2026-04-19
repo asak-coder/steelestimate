@@ -28,7 +28,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/v1/auth', v1AuthRoutes);
-app.use('/api', sectionRoutes);
+app.use('/api/sections', sectionRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

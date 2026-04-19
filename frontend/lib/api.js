@@ -1,13 +1,11 @@
-const DEFAULT_API_BASE = 'https://api.steelestimate.com';
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function getApiBase() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE;
-
-  if (typeof apiUrl !== 'string' || !apiUrl.trim()) {
+  if (typeof API_URL !== 'string' || !API_URL.trim()) {
     throw new Error('NEXT_PUBLIC_API_URL is required.');
   }
 
-  return apiUrl.replace(/\/$/, '');
+  return API_URL.replace(/\/$/, '');
 }
 
 function buildUrl(path) {
@@ -199,6 +197,15 @@ export async function generateEstimatePdf(estimateId) {
 }
 
 export async function getSections(type) {
+  const apiBase = getApiBase();
   const path = type ? `/api/sections/${encodeURIComponent(type)}` : '/api/sections';
-  return request(path);
+  const res = await fetch(`${apiBase}${path}`, {
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch sections');
+  }
+
+  return res.json();
 }
