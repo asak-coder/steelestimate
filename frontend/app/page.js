@@ -66,6 +66,12 @@ export default function HomePage() {
                 >
                   Open MS Weight Calculator
                 </Link>
+                <Link
+                  href="/tools/ai-estimator"
+                  className="inline-flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 text-sm font-semibold text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                >
+                  Open AI Estimator
+                </Link>
               </div>
             </div>
           </div>

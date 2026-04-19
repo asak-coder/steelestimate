@@ -40,6 +40,53 @@ const leadSchema = new mongoose.Schema({
   },
 
   // =============================
+  // LEAD ENRICHMENT
+  // =============================
+  estimatedCost: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
+  projectType: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+
+  source: {
+    type: String,
+    enum: ['calculator', 'ai', 'boq', 'mobile', 'admin', 'api'],
+    default: 'calculator',
+  },
+
+  priority: {
+    type: String,
+    enum: ['normal', 'high'],
+    default: 'normal',
+  },
+
+  whatsappLink: {
+    type: String,
+    default: '',
+  },
+
+  whatsappMessage: {
+    type: String,
+    default: '',
+  },
+
+  adminNotifiedAt: {
+    type: Date,
+    default: null,
+  },
+
+  emailSentAt: {
+    type: Date,
+    default: null,
+  },
+
+  // =============================
   // ENGINEERING DATA (ADMIN)
   // =============================
   projectData: {

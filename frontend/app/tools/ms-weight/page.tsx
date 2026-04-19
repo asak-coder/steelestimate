@@ -54,6 +54,7 @@ export default function MsWeightPage() {
   const [leadFormOpen, setLeadFormOpen] = useState(false);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSuccess, setLeadSuccess] = useState("");
+  const [leadWhatsAppLink, setLeadWhatsAppLink] = useState("");
   const [leadError, setLeadError] = useState("");
   const [leadForm, setLeadForm] = useState<LeadFormState>({
     name: "",
@@ -164,6 +165,7 @@ export default function MsWeightPage() {
 
   const openLeadForm = () => {
     setLeadSuccess("");
+    setLeadWhatsAppLink("");
     setLeadError("");
     setLeadFormOpen(true);
   };
@@ -178,6 +180,7 @@ export default function MsWeightPage() {
     setLeadSubmitting(true);
     setLeadError("");
     setLeadSuccess("");
+    setLeadWhatsAppLink("");
 
     try {
       const response = await createLead({
@@ -218,13 +221,20 @@ export default function MsWeightPage() {
         },
       });
 
-      const payload = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error((payload && (payload.message || payload.error)) || "Failed to submit lead");
-      }
+      const payload = response && typeof response === "object" ? response : null;
+      const whatsappLink =
+        payload?.automation?.whatsappLink ||
+        payload?.data?.whatsappLink ||
+        payload?.data?.whatsapp?.link ||
+        (whatsappHref || "");
 
       setLeadSuccess("Your estimate request has been submitted. Our team will contact you shortly.");
+      setLeadWhatsAppLink(whatsappLink);
+
+      if (whatsappLink && typeof window !== "undefined") {
+        window.open(whatsappLink, "_blank", "noopener,noreferrer");
+      }
+
       setLeadForm({
         name: "",
         phone: "",
@@ -249,8 +259,40 @@ export default function MsWeightPage() {
         ) : null}
 
         {leadSuccess ? (
-          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            {leadSuccess}
+          <div className="mb-6 rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-emerald-50 shadow-lg shadow-emerald-950/20 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">
+                  Request received successfully
+                </div>
+                <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                  Thank you for your enquiry
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-emerald-100/90 sm:text-base">
+                  {leadSuccess}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:min-w-[220px]">
+                {leadWhatsAppLink ? (
+                  <a
+                    href={leadWhatsAppLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+                  >
+                    Continue on WhatsApp
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setLeadSuccess("")}
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-950/60 px-5 py-3 text-sm font-semibold text-white transition hover:border-cyan-400/60 hover:text-cyan-300"
+                >
+                  Back to calculator
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
 

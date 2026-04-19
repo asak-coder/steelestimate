@@ -351,8 +351,17 @@ export async function getAdminUsers() {
   throw lastError || createRequestError('Unable to load admin users', 500);
 }
 
-export async function getAdminLeads() {
-  const fallbackPaths = ['/api/admin/leads'];
+export async function getAdminLeads(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const queryString = searchParams.toString();
+  const fallbackPaths = [queryString ? `/api/admin/leads?${queryString}` : '/api/admin/leads'];
   let lastError = null;
 
   for (const path of fallbackPaths) {
@@ -490,6 +499,13 @@ export async function calculateEstimate(payload) {
   });
 }
 
+export async function estimateWithAi(payload) {
+  return request('/api/ai/estimate', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 export async function createEstimate(payload) {
   return request('/api/estimates', {
     method: 'POST',
@@ -542,6 +558,7 @@ const api = {
   deleteProject,
   getEstimates,
   calculateEstimate,
+  estimateWithAi,
   createEstimate,
   deleteEstimate,
 };

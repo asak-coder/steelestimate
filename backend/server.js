@@ -9,8 +9,10 @@ const v1AuthRoutes = require('./routes/v1/authRoutes');
 const sectionRoutes = require('./routes/sectionRoutes');
 const boqRoutes = require('./routes/boqRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const leadRoutes = require('./routes/leadRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const estimateRoutes = require('./routes/v1/estimateRoutes');
+const aiEstimateRoutes = require('./routes/v1/aiEstimateRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -40,10 +42,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/v1/auth', v1AuthRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/boq', boqRoutes);
+app.use('/api/leads', leadRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api', paymentRoutes);
 app.use('/api/v1/estimate', estimateRoutes);
 app.use('/api/v1/estimates', estimateRoutes);
+app.use('/api/ai', aiEstimateRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
