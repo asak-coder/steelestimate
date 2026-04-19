@@ -18,12 +18,14 @@ export default function AdminLoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    if (hasValidSession()) {
-      router.replace(nextPath);
-      return;
+    try {
+      if (hasValidSession()) {
+        router.replace(nextPath);
+        return;
+      }
+    } finally {
+      setCheckingSession(false);
     }
-
-    setCheckingSession(false);
   }, [nextPath, router]);
 
   async function handleSubmit(event) {

@@ -1,61 +1,21 @@
-const AppError = require("../utils/appError");
-const { verifyToken } = require("../services/jwtService");
+const jwt = require('jsonwebtoken');
+const { env } = require('../config/env');
 
-const normalizeRole = (role) => String(role || "").toUpperCase();
-
-const getTokenFromRequest = (req) => {
-  if (req.cookies && req.cookies.authToken) {
-    return req.cookies.authToken;
-  }
-
-  return null;
-};
-
-const requireAuth = (req, res, next) => {
-  const token = getTokenFromRequest(req);
-
-  if (!token) {
-    return next(new AppError("Authentication required", 401));
-  }
-
+const auth = (req, res, next) => {
   try {
-    const decoded = verifyToken(token);
+    console.log('Auth cookies:', req.cookies);
+    const token = req.cookies && req.cookies.authToken;
 
-    req.user = {
-      id: decoded.id || decoded.sub,
-      role: normalizeRole(decoded.role)
-    };
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
 
+    const decoded = jwt.verify(token, env.JWT_SECRET);
+    req.user = decoded;
     return next();
   } catch (error) {
-    return next(new AppError("Invalid or expired token", 401));
+    return res.status(401).json({ message: 'Invalid or expired session' });
   }
 };
 
-const requireRole = (...allowedRoles) => {
-  const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
-
-  return (req, res, next) => {
-    if (!req.user) {
-      return next(new AppError("Authentication required", 401));
-    }
-
-    if (!normalizedAllowedRoles.includes(normalizeRole(req.user.role))) {
-      return next(new AppError("Insufficient permissions", 403));
-    }
-
-    return next();
-  };
-};
-
-const requireAdmin = requireRole("ADMIN");
-const requireAdminOrManager = requireRole("ADMIN", "MANAGER");
-const requireViewer = requireRole("ADMIN", "MANAGER", "VIEWER");
-
-module.exports = {
-  requireAuth,
-  requireRole,
-  requireAdmin,
-  requireAdminOrManager,
-  requireViewer
-};
+module.exports = auth;

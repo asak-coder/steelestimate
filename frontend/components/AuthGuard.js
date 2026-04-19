@@ -15,6 +15,7 @@ function AuthGuard({ children }) {
     const guard = () => {
       if (!hasValidSession()) {
         router.replace(`/admin/login?next=${encodeURIComponent(pathname || '/admin')}`);
+        setReady(false);
         return;
       }
 
