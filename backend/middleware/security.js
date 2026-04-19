@@ -27,7 +27,7 @@ function parseOrigins(value) {
 }
 
 const frontendUrl = normalizeOrigin(
-  process.env.FRONTEND_URL || process.env.ADMIN_FRONTEND_URL || "https://steelestimate.vercel.app"
+  process.env.FRONTEND_URL || process.env.ADMIN_FRONTEND_URL || "https://steelestimate.com"
 );
 const envOrigins = parseOrigins(process.env.CORS_ORIGIN || "");
 const corsOrigins = [...new Set([frontendUrl, ...envOrigins].map(normalizeOrigin))];

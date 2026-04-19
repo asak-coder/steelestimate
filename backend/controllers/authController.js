@@ -7,7 +7,7 @@ const isPrivilegedRole = (role) => ["ADMIN", "MANAGER"].includes(String(role || 
 const cookieOptions = () => ({
   httpOnly: true,
   secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
-  sameSite: "lax",
+  sameSite: String(process.env.NODE_ENV || "").toLowerCase() === "production" ? "none" : "lax",
   path: "/",
   maxAge: 8 * 60 * 60 * 1000
 });
@@ -29,7 +29,7 @@ const clearAuthCookie = (res) => {
   res.clearCookie("authToken", {
     httpOnly: true,
     secure: String(process.env.NODE_ENV || "").toLowerCase() === "production",
-    sameSite: "lax",
+    sameSite: String(process.env.NODE_ENV || "").toLowerCase() === "production" ? "none" : "lax",
     path: "/"
   });
 };
