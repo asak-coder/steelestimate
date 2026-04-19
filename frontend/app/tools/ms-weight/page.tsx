@@ -101,16 +101,23 @@ export default function MsWeightPage() {
           nextSections[key] = items;
         });
 
+        if (cancelled) return;
+
         setSectionsByType(nextSections);
 
-        const firstAvailableType = sectionOptions.find(({ key }) => nextSections[key].length)?.key ?? "ISMB";
-        const firstAvailableSize = nextSections[firstAvailableType][0]?.size ?? "";
+        const firstAvailableType = sectionOptions.find(({ key }) => nextSections[key].length)?.key;
+        if (!firstAvailableType) {
+          setSectionType("ISMB");
+          setSectionSize("");
+          setSectionError("No sections available");
+          return;
+        }
 
         setSectionType(firstAvailableType);
-        setSectionSize(firstAvailableSize);
+        setSectionSize(nextSections[firstAvailableType][0]?.size ?? "");
       } catch (error) {
         if (!cancelled) {
-          setSectionError(error instanceof Error ? error.message : "Failed to load steel sections");
+          setSectionError("Failed to load sections");
         }
       } finally {
         if (!cancelled) setLoadingSections(false);
@@ -139,10 +146,23 @@ export default function MsWeightPage() {
     [activeSections, sectionSize]
   );
 
+  const lengthValue = Number(lengthM);
+  const quantityValue = Number(quantity);
+  const validationError =
+    !selectedSection
+      ? activeSections.length
+        ? "Please select a section size"
+        : "No sections available"
+      : !Number.isFinite(lengthValue) || lengthValue <= 0
+        ? "Enter a valid length in meters"
+        : !Number.isFinite(quantityValue) || quantityValue <= 0
+          ? "Enter a valid quantity"
+          : "";
+
   const result: MsWeightResult = calculateWeight(sectionType, {
     size: selectedSection?.size,
-    lengthM: Number(lengthM) || 0,
-    quantity: Number(quantity) || 0,
+    lengthM: Number.isFinite(lengthValue) && lengthValue > 0 ? lengthValue : 0,
+    quantity: Number.isFinite(quantityValue) && quantityValue > 0 ? quantityValue : 0,
     weightPerMeter: selectedSection?.weightPerMeter ?? 0,
   });
 

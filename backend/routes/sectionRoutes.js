@@ -3,12 +3,12 @@ const Section = require('../models/Section');
 
 const router = express.Router();
 
-const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const ALLOWED_TYPES = new Set(['ISMB', 'ISMC', 'ISA']);
 
 router.get('/', async (req, res, next) => {
   try {
     const sections = await Section.find({})
-      .sort({ designation: 1, name: 1 })
+      .sort({ category: 1, designation: 1 })
       .lean();
 
     return res.status(200).json({
@@ -22,7 +22,7 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:type', async (req, res, next) => {
   try {
-    const type = String(req.params.type || '').trim();
+    const type = String(req.params.type || '').trim().toUpperCase();
 
     if (!type) {
       return res.status(400).json({
@@ -31,15 +31,15 @@ router.get('/:type', async (req, res, next) => {
       });
     }
 
-    const typeRegex = new RegExp(`^${escapeRegex(type)}$`, 'i');
+    if (!ALLOWED_TYPES.has(type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid section type'
+      });
+    }
 
-    const sections = await Section.find({
-      $or: [
-        { category: typeRegex },
-        { type: typeRegex }
-      ]
-    })
-      .sort({ designation: 1, name: 1 })
+    const sections = await Section.find({ category: type })
+      .sort({ designation: 1 })
       .lean();
 
     return res.status(200).json({
