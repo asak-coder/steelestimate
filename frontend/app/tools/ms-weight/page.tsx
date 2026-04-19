@@ -78,12 +78,7 @@ export default function MsWeightPage() {
       try {
         const responses = await Promise.all(
           sectionOptions.map(async ({ key }) => {
-            const response = await fetch(`/api/sections/${key}`);
-            if (!response.ok) {
-              throw new Error(`Failed to load ${key} sections`);
-            }
-
-            const payload = await response.json();
+            const payload = await getSections(key);
             const items = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
 
             const normalized = items

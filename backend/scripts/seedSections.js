@@ -358,6 +358,10 @@ async function connectDatabase() {
     return db();
   }
 
+  if (db && typeof db.connectDB === 'function') {
+    return db.connectDB();
+  }
+
   if (db && typeof db.connect === 'function') {
     return db.connect();
   }
@@ -382,15 +386,24 @@ async function upsertSections() {
   };
 
   for (const section of sections) {
+    const normalizedSection = {
+      ...section,
+      name: section.name || section.designation,
+      category: section.category || section.type,
+    };
+
     const filter = {
-      type: section.type,
-      designation: section.designation,
+      designation: normalizedSection.designation,
+      $or: [
+        { type: normalizedSection.type },
+        { category: normalizedSection.category },
+      ],
     };
 
     const existing = await Section.findOne(filter).lean();
 
     if (!existing) {
-      await Section.create(section);
+      await Section.create(normalizedSection);
       stats.inserted += 1;
       continue;
     }
@@ -398,7 +411,7 @@ async function upsertSections() {
     const nextData = {};
     let changed = false;
 
-    for (const [key, value] of Object.entries(section)) {
+    for (const [key, value] of Object.entries(normalizedSection)) {
       if (key === '_id' || key === '__v') {
         continue;
       }

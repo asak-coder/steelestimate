@@ -7,6 +7,12 @@ const sectionSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
+  category: {
+    type: String,
+    required: false,
+    trim: true,
+    index: true
+  },
   name: {
     type: String,
     required: true,
@@ -45,6 +51,7 @@ const sectionSchema = new mongoose.Schema({
   timestamps: true
 });
 
+sectionSchema.index({ category: 1, designation: 1, name: 1 });
 sectionSchema.index({ type: 1, designation: 1, name: 1 });
 
 module.exports = mongoose.models.Section || mongoose.model('Section', sectionSchema);

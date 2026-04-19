@@ -31,8 +31,13 @@ router.get('/:type', async (req, res, next) => {
       });
     }
 
+    const typeRegex = new RegExp(`^${escapeRegex(type)}$`, 'i');
+
     const sections = await Section.find({
-      type: new RegExp(`^${escapeRegex(type)}$`, 'i')
+      $or: [
+        { category: typeRegex },
+        { type: typeRegex }
+      ]
     })
       .sort({ designation: 1, name: 1 })
       .lean();

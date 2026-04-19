@@ -246,8 +246,8 @@ export async function verifySubscribePayment(payload) {
 export const verifySubscriptionPayment = verifyPayment;
 export const fetchPlans = getPlans;
 
-export async function getSections() {
-  const data = await request('/api/sections', { method: 'GET' });
+export async function getSections(type) {
+  const data = await request(`/api/sections/${type}`, { method: 'GET' });
   return unwrapData(data);
 }
 
