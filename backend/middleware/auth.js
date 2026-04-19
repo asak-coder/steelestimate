@@ -3,7 +3,6 @@ const { env } = require('../config/env');
 
 const auth = (req, res, next) => {
   try {
-    console.log('Auth cookies:', req.cookies);
     const token = req.cookies && req.cookies.authToken;
 
     if (!token) {

@@ -6,6 +6,7 @@ const cookieOptions = {
   secure: true,
   sameSite: 'none',
   path: '/',
+  domain: '.steelestimate.com',
 };
 
 const login = async (req, res) => {
