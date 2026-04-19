@@ -197,3 +197,8 @@ export async function generateEstimatePdf(estimateId) {
     body: JSON.stringify({ estimateId }),
   });
 }
+
+export async function getSections(type) {
+  const path = type ? `/api/sections/${encodeURIComponent(type)}` : '/api/sections';
+  return request(path);
+}

@@ -6,6 +6,7 @@ const { env } = require('./config/env');
 const securityMiddleware = require('./middleware/security');
 const authRoutes = require('./routes/authRoutes');
 const v1AuthRoutes = require('./routes/v1/authRoutes');
+const sectionRoutes = require('./routes/sectionRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -27,13 +28,14 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/v1/auth', v1AuthRoutes);
+app.use('/api', sectionRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 (async () => {
   try {
-    const PORT = process.env.PORT || 5000;
+    const PORT = process.env.PORT || env.PORT || 5000;
 
     if (!process.env.MONGO_URI) {
       throw new Error('MONGO_URI missing');

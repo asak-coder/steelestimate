@@ -1,16 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  isStandardDatabases,
-  isaSections,
-  ismbSections,
-  ismcSections,
-  type StandardSection,
-} from "@/lib/isDatabase";
+import { useEffect, useMemo, useState } from "react";
+import { getSections } from "@/lib/api";
+import { ismbSections, type StandardSection } from "@/lib/isDatabase";
 
 type Mode = "manual" | "isStandard";
-type StandardKey = keyof typeof isStandardDatabases;
+type StandardKey = "ISMB" | "ISMC" | "ISA";
 type CalculationResult = {
   sectionName: string;
   standard: string;
@@ -18,10 +13,10 @@ type CalculationResult = {
   totalWeight: number;
 };
 
-const standardOptions: { key: StandardKey; label: string; sections: StandardSection[] }[] = [
-  { key: "ISMB", label: "ISMB", sections: ismbSections },
-  { key: "ISMC", label: "ISMC", sections: ismcSections },
-  { key: "ISA", label: "ISA", sections: isaSections },
+const standardOptions: { key: StandardKey; label: string }[] = [
+  { key: "ISMB", label: "ISMB" },
+  { key: "ISMC", label: "ISMC" },
+  { key: "ISA", label: "ISA" },
 ];
 
 const formatNumber = (value: number) =>
@@ -36,8 +31,90 @@ export default function EstimatePage() {
   const [manualSectionName, setManualSectionName] = useState("Manual Section");
   const [manualWeightPerMeter, setManualWeightPerMeter] = useState("0");
   const [standardLabel, setStandardLabel] = useState("IS 808");
+  const [sectionsByType, setSectionsByType] = useState<Record<StandardKey, StandardSection[]>>({
+    ISMB: [],
+    ISMC: [],
+    ISA: [],
+  });
+  const [loadingSections, setLoadingSections] = useState(true);
+  const [sectionError, setSectionError] = useState("");
 
-  const activeSections = useMemo(() => isStandardDatabases[sectionType], [sectionType]);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSections() {
+      setLoadingSections(true);
+      setSectionError("");
+
+      try {
+        const response = await getSections();
+        const items = Array.isArray(response?.data) ? response.data : [];
+
+        const grouped = items.reduce(
+          (acc: Record<StandardKey, StandardSection[]>, item: any) => {
+            const key = String(item?.type || "").toUpperCase() as StandardKey;
+            if (!acc[key]) return acc;
+
+            const size = String(item?.designation || item?.name || "").trim();
+            if (!size) return acc;
+
+            acc[key].push({
+              size,
+              weightPerMeter: Number(item?.weight) || 0,
+            });
+
+            return acc;
+          },
+          { ISMB: [], ISMC: [], ISA: [] }
+        );
+
+        if (!cancelled) {
+          const sourceSections = { ISMB: [] as StandardSection[], ISMC: [] as StandardSection[], ISA: [] as StandardSection[] };
+
+          items.forEach((item: any) => {
+            const key = String(item?.type || "").toUpperCase() as StandardKey;
+            if (!sourceSections[key]) return;
+
+            const size = String(item?.designation || item?.name || "").trim();
+            if (!size) return;
+
+            sourceSections[key].push({
+              size,
+              weightPerMeter: Number(item?.weight) || 0,
+            });
+          });
+
+          (Object.keys(sourceSections) as StandardKey[]).forEach((key) => {
+            sourceSections[key].sort((a: StandardSection, b: StandardSection) => Number(a.size) - Number(b.size));
+          });
+
+          setSectionsByType(sourceSections);
+
+          if (!sourceSections[sectionType].length) {
+            const firstType = (Object.keys(sourceSections) as StandardKey[]).find((key) => sourceSections[key].length);
+            if (firstType) {
+              setSectionType(firstType);
+              setSectionSize(sourceSections[firstType][0]?.size ?? "");
+            }
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSectionError(error instanceof Error ? error.message : "Failed to load sections");
+        }
+      } finally {
+        if (!cancelled) setLoadingSections(false);
+      }
+    }
+
+    loadSections();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeSections = useMemo(() => sectionsByType[sectionType] || [], [sectionType, sectionsByType]);
 
   const selectedSection = useMemo(
     () => activeSections.find((item) => item.size === sectionSize) ?? activeSections[0],
@@ -64,6 +141,16 @@ export default function EstimatePage() {
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      {sectionError ? (
+        <div className="mx-auto mb-4 max-w-7xl rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {sectionError}
+        </div>
+      ) : null}
+      {loadingSections ? (
+        <div className="mx-auto mb-4 max-w-7xl rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
+          Loading steel section database...
+        </div>
+      ) : null}
       <div className="mx-auto max-w-7xl">
         <div className="industrial-card soft-fade-in rounded-2xl p-6 sm:p-8">
           <div className="flex flex-col gap-3 border-b border-slate-700/60 pb-6">
@@ -123,10 +210,11 @@ export default function EstimatePage() {
                           onChange={(e) => {
                             const nextType = e.target.value as StandardKey;
                             setSectionType(nextType);
-                            const nextSections = isStandardDatabases[nextType];
+                            const nextSections = sectionsByType[nextType] || [];
                             setSectionSize(nextSections[0]?.size ?? "");
                           }}
                           className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
+                          disabled={loadingSections}
                         >
                           {standardOptions.map((option) => (
                             <option key={option.key} value={option.key}>
@@ -144,6 +232,7 @@ export default function EstimatePage() {
                           value={sectionSize}
                           onChange={(e) => setSectionSize(e.target.value)}
                           className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-cyan-400"
+                          disabled={loadingSections}
                         >
                           {activeSections.map((section) => (
                             <option key={section.size} value={section.size}>
