@@ -6,7 +6,7 @@ import { ismbSections, type StandardSection } from "@/lib/isDatabase";
 import { calculateWeight as calculateMsWeight, type MsSectionType } from "@/lib/weightEngine";
 
 type Mode = "manual" | "isStandard";
-type StandardKey = MsSectionType;
+type StandardKey = Extract<MsSectionType, "ISMB" | "ISMC" | "ISA">;
 type RowPreset = "section" | "plate" | "pipe";
 type CalculationResult = {
   sectionName: string;

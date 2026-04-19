@@ -196,16 +196,14 @@ export async function generateEstimatePdf(estimateId) {
   });
 }
 
-export async function getSections(type) {
-  const apiBase = getApiBase();
-  const path = type ? `/api/sections/${encodeURIComponent(type)}` : '/api/sections';
-  const res = await fetch(`${apiBase}${path}`, {
-    credentials: 'include',
+export async function createLead(payload) {
+  return request('/api/leads', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
+}
 
-  if (!res.ok) {
-    throw new Error('Failed to fetch sections');
-  }
-
-  return res.json();
+export async function getSections(type) {
+  const path = type ? `/api/sections/${encodeURIComponent(type)}` : '/api/sections';
+  return request(path);
 }

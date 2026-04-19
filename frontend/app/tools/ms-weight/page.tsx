@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createLead, getSections } from "@/lib/api";
 import { calculateWeight, type MsSectionType, type MsWeightResult } from "@/lib/weightEngine";
 import type { StandardSection } from "@/lib/isDatabase";
 
-type StandardKey = MsSectionType;
+type StandardKey = Extract<MsSectionType, "ISMB" | "ISMC" | "ISA">;
 type SectionRecord = Record<StandardKey, StandardSection[]>;
 
 type LeadFormState = {
@@ -60,6 +61,11 @@ export default function MsWeightPage() {
     email: "",
     projectType: projectTypeOptions[0],
   });
+  const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "").replace(/\D/g, "");
+  const whatsappMessage = encodeURIComponent(
+    `Hello, I used the SteelEstimate MS Weight Calculator and want a detailed BOQ + official quotation within 24 hours.`
+  );
+  const whatsappHref = whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${whatsappMessage}` : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -174,43 +180,42 @@ export default function MsWeightPage() {
     setLeadSuccess("");
 
     try {
-      const response = await fetch("/api/leads", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await createLead({
+        estimateId: `ms-weight-${Date.now()}`,
+        clientName: leadForm.name.trim(),
+        phone: leadForm.phone.trim(),
+        email: leadForm.email.trim(),
+        notes: `Project Type: ${leadForm.projectType}. Source: weight_calculator.`,
+        source: "api",
+        consent: true,
+        name: leadForm.name.trim(),
+        message: "Get full project estimate & BOQ",
+        projectData: {
+          tool: "ms-weight",
+          projectType: leadForm.projectType,
+          sectionType: sectionType,
+          materialType: sectionType,
+          sectionName: result.sectionName,
+          sectionSize: selectedSection?.size ?? "",
+          lengthM: Number(lengthM) || 0,
+          quantity: Number(quantity) || 0,
+          weight: weightKg,
+          weightKg,
+          totalWeightKg: weightKg,
+          mt,
+          fabricationRate,
+          erectionRate,
+          fabricationCost,
+          erectionCost,
+          totalCost,
+          estimatedRangePercent: 10,
+          source: "weight_calculator",
         },
-        credentials: "include",
-        body: JSON.stringify({
-          name: leadForm.name.trim(),
-          clientName: leadForm.name.trim(),
-          phone: leadForm.phone.trim(),
-          email: leadForm.email.trim(),
-          message: "Get full project estimate & BOQ",
-          source: "api",
-          consent: true,
-          projectData: {
-            tool: "ms-weight",
-            projectType: leadForm.projectType,
-            sectionType: sectionType,
-            sectionName: result.sectionName,
-            sectionSize: selectedSection?.size ?? "",
-            lengthM: Number(lengthM) || 0,
-            quantity: Number(quantity) || 0,
-            weightKg,
-            mt,
-            fabricationRate,
-            erectionRate,
-            fabricationCost,
-            erectionCost,
-            totalCost,
-            estimatedRangePercent: 10,
-          },
-          cost: {
-            fabricationCost,
-            erectionCost,
-            totalCost,
-          },
-        }),
+        cost: {
+          fabricationCost,
+          erectionCost,
+          totalCost,
+        },
       });
 
       const payload = await response.json().catch(() => null);
@@ -387,17 +392,33 @@ export default function MsWeightPage() {
               </div>
 
               <div className="mt-6 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                <p className="text-sm font-semibold text-blue-100">🚀 Get full project estimate & BOQ</p>
+                <p className="text-sm font-semibold text-blue-100">🚀 Get Detailed BOQ + Official Quotation (Within 24 Hours)</p>
                 <p className="mt-1 text-sm leading-6 text-slate-200">
-                  Capture project details and turn this calculator into a sales entry point.
+                  Capture project details, share the estimate with our team, and reach us instantly on WhatsApp.
                 </p>
-                <button
-                  type="button"
-                  onClick={openLeadForm}
-                  className="mt-4 w-full rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-400 active:scale-[0.99]"
-                >
-                  Get full project estimate & BOQ
-                </button>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={openLeadForm}
+                    className="w-full rounded-xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-400 active:scale-[0.99]"
+                  >
+                    Get Detailed BOQ + Official Quotation (Within 24 Hours)
+                  </button>
+                  {whatsappHref ? (
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                    >
+                      Chat on WhatsApp
+                    </a>
+                  ) : (
+                    <span className="inline-flex w-full items-center justify-center rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-3 text-sm font-semibold text-slate-300">
+                      WhatsApp number not configured
+                    </span>
+                  )}
+                </div>
               </div>
             </aside>
           </div>
