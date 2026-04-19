@@ -2,40 +2,51 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { hasValidSession, onAuthChange } from '../lib/auth';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 function AuthGuard({ children }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
+    const checkAuth = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/me`, {
+          credentials: 'include'
+        });
 
-    const guard = () => {
-      if (!hasValidSession()) {
-        router.replace(`/admin/login?next=${encodeURIComponent(pathname || '/admin')}`);
-        setReady(false);
-        return;
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-
-      setReady(true);
     };
 
-    guard();
+    checkAuth();
+  }, []);
 
-    const unsubscribe = onAuthChange(() => {
-      guard();
-    });
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push(`/admin/login?next=${encodeURIComponent(pathname || '/admin')}`);
+    }
+  }, [loading, user, router, pathname]);
 
-    return unsubscribe;
-  }, [pathname, router]);
+  console.log('Auth result:', user);
 
-  if (!ready) {
+  if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
         <div className="rounded-2xl border border-slate-800 bg-slate-900 px-6 py-4 text-sm text-slate-300">
-          Verifying session...
+          Checking session...
         </div>
       </main>
     );

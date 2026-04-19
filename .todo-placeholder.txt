@@ -1,1 +1,5 @@
-temporary
+- [ ] Inspect `frontend/components/AuthGuard.js` and surrounding auth flow
+- [ ] Update auth guard to always resolve loading and handle 200/401 correctly
+- [ ] Ensure redirect behavior sends unauthenticated users to `/admin/login`
+- [ ] Verify no repeated auth checks or infinite loading state
+- [ ] Confirm the implementation matches the existing Next.js App Router codebase
