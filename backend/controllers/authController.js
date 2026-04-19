@@ -18,16 +18,29 @@ const login = async (req, res) => {
 
     // Existing credential validation and user lookup should remain in the project.
     // This controller only ensures the session cookie is set correctly in production.
-    const user = req.user || { email };
+    const user = req.user || { _id: null, email, role: 'user' };
 
-    const token = jwt.sign({ email: user.email }, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN || '7d',
-    });
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+      },
+      env.JWT_SECRET,
+      {
+        expiresIn: env.JWT_EXPIRES_IN || '7d',
+      }
+    );
 
     res.cookie('authToken', token, cookieOptions);
     return res.status(200).json({
+      success: true,
       message: 'Login successful',
-      user,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (error) {
     return res.status(500).json({ message: 'Login failed' });
@@ -36,16 +49,15 @@ const login = async (req, res) => {
 
 const me = async (req, res) => {
   try {
-    console.log('Auth /me cookies:', req.cookies);
-
-    const token = req.cookies && req.cookies.authToken;
+    const token = req.cookies.authToken;
     if (!token) {
-      return res.status(401).json({ message: 'Not authenticated' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const decoded = jwt.verify(token, env.JWT_SECRET);
-    return res.status(200).json({
-      user: decoded,
+    const decodedUser = jwt.verify(token, env.JWT_SECRET);
+    return res.json({
+      success: true,
+      user: decodedUser,
     });
   } catch (error) {
     return res.status(401).json({ message: 'Session expired or invalid' });
@@ -53,10 +65,7 @@ const me = async (req, res) => {
 };
 
 const logout = async (req, res) => {
-  res.clearCookie('authToken', {
-    ...cookieOptions,
-    maxAge: undefined,
-  });
+  res.clearCookie('authToken', cookieOptions);
   return res.status(200).json({ message: 'Logged out' });
 };
 

@@ -10,17 +10,16 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-app.use(securityMiddleware);
-
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'https://steelestimate.com',
+    origin: 'https://steelestimate.com',
     credentials: true,
   })
 );
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(securityMiddleware);
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
