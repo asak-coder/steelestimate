@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { env } = require('../config/env');
 
-const auth = (req, res, next) => {
+function requireAuth(req, res, next) {
   try {
     const token = req.cookies && req.cookies.authToken;
 
@@ -15,6 +15,30 @@ const auth = (req, res, next) => {
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired session' });
   }
-};
+}
 
-module.exports = auth;
+function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+
+  const role = String(req.user.role || req.user.userRole || '').toLowerCase();
+  const isAdmin =
+    role === 'admin' ||
+    role === 'superadmin' ||
+    req.user.isAdmin === true ||
+    req.user.admin === true ||
+    req.user.isAdmin === 'true';
+
+  if (!isAdmin) {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+
+  return next();
+}
+
+module.exports = requireAuth;
+module.exports.requireAuth = requireAuth;
+module.exports.requireAdmin = requireAdmin;
+module.exports.authMiddleware = requireAuth;
+module.exports.protectRoute = requireAuth;

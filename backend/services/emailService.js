@@ -1,4 +1,9 @@
-const nodemailer = require('nodemailer');
+let nodemailer;
+try {
+    nodemailer = require('nodemailer');
+} catch (error) {
+    nodemailer = null;
+}
 
 const DEFAULT_FROM_NAME = 'A K ENGINEERING';
 const DEFAULT_FROM_EMAIL = process.env.EMAIL_USER || '';

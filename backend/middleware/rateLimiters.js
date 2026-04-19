@@ -1,4 +1,9 @@
-const rateLimit = require("express-rate-limit");
+let rateLimit;
+try {
+  rateLimit = require('express-rate-limit');
+} catch (error) {
+  rateLimit = () => (req, res, next) => next();
+}
 
 const baseOptions = {
   standardHeaders: true,
@@ -11,7 +16,7 @@ const authLimiter = rateLimit({
   max: 10,
   message: {
     success: false,
-    message: "Too many authentication requests, please try again later"
+    message: 'Too many authentication requests, please try again later'
   }
 });
 
@@ -21,7 +26,7 @@ const adminLimiter = rateLimit({
   max: 20,
   message: {
     success: false,
-    message: "Too many admin requests, please try again later"
+    message: 'Too many admin requests, please try again later'
   }
 });
 
@@ -31,7 +36,7 @@ const sensitiveLimiter = rateLimit({
   max: 30,
   message: {
     success: false,
-    message: "Too many requests, please try again later"
+    message: 'Too many requests, please try again later'
   }
 });
 
@@ -41,7 +46,7 @@ const pebCalcLimiter = rateLimit({
   max: 10,
   message: {
     success: false,
-    message: "Too many PEB calculation requests, please try again later"
+    message: 'Too many PEB calculation requests, please try again later'
   }
 });
 

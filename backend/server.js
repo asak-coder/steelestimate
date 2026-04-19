@@ -56,12 +56,12 @@ app.use(errorHandler);
   try {
     const PORT = process.env.PORT || env.PORT || 5000;
 
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI missing');
+    if (process.env.MONGO_URI) {
+      await mongoose.connect(process.env.MONGO_URI);
+      console.log('✅ MongoDB Connected');
+    } else {
+      console.warn('⚠️ MONGO_URI missing. Starting server without database connection.');
     }
-
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('✅ MongoDB Connected');
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);

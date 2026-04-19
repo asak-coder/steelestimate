@@ -10,11 +10,9 @@ const {
 
 const router = express.Router();
 
-router.use(requireAuth, requireAdmin, adminLimiter);
-
-router.get('/stats', getAdminStats);
-router.get('/users', getAdminUsers);
-router.get('/leads', getAdminLeads);
-router.get('/subscriptions', getAdminSubscriptions);
+router.get('/stats', requireAuth, requireAdmin, adminLimiter, getAdminStats);
+router.get('/users', requireAuth, requireAdmin, adminLimiter, getAdminUsers);
+router.get('/leads', requireAuth, requireAdmin, adminLimiter, getAdminLeads);
+router.get('/subscriptions', requireAuth, requireAdmin, adminLimiter, getAdminSubscriptions);
 
 module.exports = router;
