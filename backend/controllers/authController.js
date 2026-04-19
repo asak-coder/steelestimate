@@ -4,7 +4,7 @@ const { env } = require('../config/env');
 const cookieOptions = {
   httpOnly: true,
   secure: true,
-  sameSite: 'none',
+  sameSite: 'lax',
   path: '/',
   domain: '.steelestimate.com',
 };

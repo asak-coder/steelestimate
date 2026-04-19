@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = 'https://steelestimate.onrender.com';
+const DEFAULT_API_BASE = 'https://api.steelestimate.com';
 
 function getApiBase() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE;
