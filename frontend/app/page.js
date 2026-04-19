@@ -53,12 +53,20 @@ export default function HomePage() {
               <p className="mt-2 text-sm leading-6 text-slate-300">
                 Quickly estimate steel weight from common shapes and dimensions using deterministic formulas.
               </p>
-              <Link
-                href="/tools/weight-calculator"
-                className="mt-4 inline-flex items-center justify-center rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-100 transition hover:border-blue-400 hover:bg-blue-500/20"
-              >
-                Open Weight Calculator
-              </Link>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link
+                  href="/tools/weight-calculator"
+                  className="inline-flex items-center justify-center rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-100 transition hover:border-blue-400 hover:bg-blue-500/20"
+                >
+                  Open Weight Calculator
+                </Link>
+                <Link
+                  href="/tools/ms-weight"
+                  className="inline-flex items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400 hover:bg-cyan-500/20"
+                >
+                  Open MS Weight Calculator
+                </Link>
+              </div>
             </div>
           </div>
         </div>
