@@ -150,4 +150,35 @@ table {
   .industrial-muted {
     @apply text-slate-400;
   }
+
+  .soft-float {
+    animation: soft-float 6s ease-in-out infinite;
+  }
+
+  .soft-fade-in {
+    animation: soft-fade-in 420ms ease-out both;
+  }
+}
+
+@keyframes soft-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes soft-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

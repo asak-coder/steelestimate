@@ -46,6 +46,20 @@ export default function HomePage() {
             <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
               Production access now requires valid credentials and an active session token.
             </div>
+
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Public tool</p>
+              <h2 className="mt-2 text-lg font-semibold text-white">Steel weight calculator</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Quickly estimate steel weight from common shapes and dimensions using deterministic formulas.
+              </p>
+              <Link
+                href="/tools/weight-calculator"
+                className="mt-4 inline-flex items-center justify-center rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-100 transition hover:border-blue-400 hover:bg-blue-500/20"
+              >
+                Open Weight Calculator
+              </Link>
+            </div>
           </div>
         </div>
       </section>

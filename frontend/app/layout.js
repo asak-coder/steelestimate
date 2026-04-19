@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'SteelEstimate Admin',
-  description: 'Secure admin dashboard for managing leads and quotation workflows',
+  title: 'SteelEstimate',
+  description: 'SteelEstimate SaaS for secure admin workflows, estimation, and public steel tools',
 };
 
 function RootLayout({ children }) {
