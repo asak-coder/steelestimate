@@ -1,239 +1,292 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import StatCard from "../../../components/StatCard";
-import LeadTable from "../../../components/LeadTable";
-import { getAdminStats, getLeads, updateLeadNotes, updateLeadStatus } from "../../../lib/api";
-import { formatCurrency } from "../../../lib/format";
+import { useRouter } from "next/navigation";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import AdminNav from "../../../components/admin/AdminNav";
+import { getAdminStats } from "../../../lib/api";
 import { hasValidSession, onAuthChange } from "../../../lib/auth";
 
-function normalizeLeads(list) {
-  return Array.isArray(list) ? list : [];
+const DASHBOARD_PATH = "/admin/dashboard";
+
+function toNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (value && typeof value === "object") {
+    return toNumber(value.amount ?? value.value ?? value.total ?? value.price ?? value.cost ?? 0);
+  }
+  return 0;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(toNumber(value));
+}
+
+function formatChartDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+}
+
+function normalizeSeries(series, valueKeys) {
+  if (!Array.isArray(series)) return [];
+  return series.map((item) => {
+    const normalized = { ...item };
+    normalized.date = formatChartDate(item?.date ?? item?._id ?? item?.label ?? item?.day);
+    const firstKey = valueKeys.find((key) => item?.[key] !== undefined);
+    normalized.value = toNumber(item?.[firstKey] ?? item?.value ?? item?.count ?? item?.revenue ?? 0);
+    normalized.revenue = toNumber(item?.revenue ?? item?.value ?? item?.count ?? 0);
+    return normalized;
+  });
 }
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState({
-    totalLeads: 0,
-    totalEstimatedRevenue: 0,
-    conversionRate: 0,
-    conversionCount: 0,
-    statusCounts: {
-      NEW: 0,
-      HOT: 0,
-      WARM: 0,
-      COLD: 0
-    }
-  });
-  const [leads, setLeads] = useState([]);
-  const [filters, setFilters] = useState({ status: "all", from: "", to: "", score: "", search: "" });
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [selectedLead, setSelectedLead] = useState(null);
-  const [noteDraft, setNoteDraft] = useState("");
-  const [ready, setReady] = useState(false);
-
-  const filteredStats = useMemo(() => stats, [stats]);
+  const router = useRouter();
+  const [isReady, setIsReady] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!hasValidSession()) {
-      return;
+      router.replace(`${"/admin/login"}?next=${encodeURIComponent(DASHBOARD_PATH)}`);
+      return undefined;
     }
 
-    const guard = () => {
-      if (!hasValidSession()) {
-        window.location.replace("/admin/login?next=/admin/dashboard");
-        return;
-      }
-
-      setReady(true);
-    };
-
-    guard();
-
+    setIsReady(true);
     const unsubscribe = onAuthChange(() => {
-      guard();
+      if (!hasValidSession()) {
+        router.replace(`${"/admin/login"}?next=${encodeURIComponent(DASHBOARD_PATH)}`);
+      }
     });
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, [router]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!isReady) return undefined;
 
-    async function fetchData() {
+    let cancelled = false;
+
+    async function loadStats() {
       setLoading(true);
-      setError(null);
+      setError("");
 
       try {
-        const [statsResponse, leadsResponse] = await Promise.all([getAdminStats(), getLeads(filters)]);
-        const statsData = statsResponse?.data || statsResponse || {};
-        const leadsData = leadsResponse?.data || leadsResponse?.leads || leadsResponse || [];
-
-        setStats({
-          totalLeads: statsData.totalLeads ?? 0,
-          totalEstimatedRevenue: statsData.totalEstimatedRevenue ?? 0,
-          conversionRate: statsData.conversionRate ?? 0,
-          conversionCount: statsData.conversionCount ?? 0,
-          statusCounts: statsData.statusCounts || {
-            NEW: 0,
-            HOT: 0,
-            WARM: 0,
-            COLD: 0
-          }
-        });
-        setLeads(normalizeLeads(leadsData));
-      } catch (err) {
-        if (err?.status === 401 || err?.status === 403) {
-          window.location.replace("/admin/login?next=/admin/dashboard");
-          return;
+        const response = await getAdminStats();
+        const payload = response?.data ?? response ?? {};
+        if (!cancelled) {
+          setStats(payload);
         }
-        setError(err.message);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err?.message || "Failed to load admin stats.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    fetchData();
-  }, [filters, ready]);
+    loadStats();
 
-  async function handleQuickStatusUpdate(lead, status) {
-    try {
-      await updateLeadStatus(lead._id, { status });
-      setLeads((current) => current.map((item) => (item._id === lead._id ? { ...item, status } : item)));
-      if (selectedLead?._id === lead._id) {
-        setSelectedLead((current) => (current ? { ...current, status } : current));
-      }
-    } catch (err) {
-      if (err?.status === 401 || err?.status === 403) {
-        window.location.replace("/admin/login?next=/admin/dashboard");
-        return;
-      }
-      setError(err.message);
-    }
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [isReady]);
 
-  async function handleSaveNotes() {
-    if (!selectedLead?._id) return;
-    try {
-      await updateLeadNotes(selectedLead._id, noteDraft);
-      setSelectedLead((current) => (current ? { ...current, notes: noteDraft } : current));
-      setLeads((current) => current.map((item) => (item._id === selectedLead._id ? { ...item, notes: noteDraft } : item)));
-    } catch (err) {
-      if (err?.status === 401 || err?.status === 403) {
-        window.location.replace("/admin/login?next=/admin/dashboard");
-        return;
-      }
-      setError(err.message);
-    }
-  }
+  const dashboardData = useMemo(() => {
+    const payload = stats ?? {};
+    const dailyUsage = normalizeSeries(payload.dailyUsage ?? payload.usageChart ?? [], [
+      "value",
+      "count",
+      "users",
+      "logins",
+      "visits",
+    ]);
+    const revenueChart = normalizeSeries(payload.revenueChart ?? payload.revenueSeries ?? [], [
+      "revenue",
+      "value",
+      "total",
+    ]);
 
-  if (!ready) {
+    return {
+      totalUsers: toNumber(payload.totalUsers),
+      totalLeads: toNumber(payload.totalLeads),
+      totalRevenue: toNumber(payload.totalRevenue),
+      activeUsers: toNumber(payload.activeUsers),
+      dailyUsage,
+      revenueChart,
+    };
+  }, [stats]);
+
+  const cards = [
+    {
+      label: "Total users",
+      value: dashboardData.totalUsers,
+      helper: "All registered accounts",
+    },
+    {
+      label: "Total leads",
+      value: dashboardData.totalLeads,
+      helper: "Captured opportunities",
+    },
+    {
+      label: "Total revenue",
+      value: formatCurrency(dashboardData.totalRevenue),
+      helper: "From optimized pricing",
+    },
+    {
+      label: "Active users",
+      value: dashboardData.activeUsers,
+      helper: "Premium or active plans",
+    },
+  ];
+
+  if (!isReady) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 px-6 py-4 text-sm text-slate-300">
-          Verifying session...
+      <div className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-sm text-slate-500">Checking admin session...</p>
+          </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen px-4 py-8 text-[var(--foreground)] md:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.25em] text-cyan-300/80">Admin dashboard</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">Operations overview</h1>
-            <p className="mt-2 text-sm text-[var(--muted)]">Monitor lead volume, estimated revenue and active pipeline performance.</p>
+    <div className="min-h-screen bg-slate-50 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">Admin overview</p>
+          <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold text-slate-900">Dashboard</h1>
+              <p className="mt-2 text-sm text-slate-600">
+                Monitor users, leads, revenue, and recent activity from one place.
+              </p>
+            </div>
           </div>
-          <Link className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-2 text-sm text-white transition hover:border-cyan-400/50 hover:bg-cyan-400/10" href="/admin/leads">
-            View all leads
-          </Link>
-        </header>
+        </div>
+
+        <AdminNav />
 
         {error ? (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-            Error: {error}
+          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-4">
-          <StatCard title="Total Leads" value={filteredStats.totalLeads} />
-          <StatCard title="Revenue" value={formatCurrency(filteredStats.totalEstimatedRevenue)} />
-          <StatCard title="Conversion %" value={`${Number(filteredStats.conversionRate).toFixed(1)}%`} />
-          <StatCard title="Hot / Warm / Cold" value={`${filteredStats.statusCounts.HOT || 0} / ${filteredStats.statusCounts.WARM || 0} / ${filteredStats.statusCounts.COLD || 0}`} />
-        </section>
-
-        <section className="rounded-2xl border border-[var(--border)] bg-[rgba(17,24,39,0.88)] p-5 shadow-glow">
-          <form className="grid gap-4 md:grid-cols-5" onSubmit={(event) => event.preventDefault()}>
-            <label className="flex flex-col gap-2 text-sm text-white">
-              Search
-              <input className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Name, phone, email" />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white">
-              Status
-              <select className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-                <option value="all">All</option>
-                <option value="new">New</option>
-                <option value="hot">Hot</option>
-                <option value="warm">Warm</option>
-                <option value="cold">Cold</option>
-                <option value="won">Won</option>
-                <option value="lost">Lost</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white">
-              From
-              <input className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" type="date" value={filters.from} onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))} />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white">
-              To
-              <input className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" type="date" value={filters.to} onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))} />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white">
-              Score
-              <input className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" type="number" min="0" max="100" value={filters.score} onChange={(event) => setFilters((current) => ({ ...current, score: event.target.value }))} />
-            </label>
-          </form>
-        </section>
-
-        <LeadTable
-          leads={leads}
-          onStatusChange={(lead) => {
-            setSelectedLead(lead);
-            setNoteDraft(lead.notes || "");
-          }}
-          emptyMessage={loading ? "Loading leads..." : "No leads match the selected filters."}
-        />
-
-        {selectedLead ? (
-          <section className="rounded-2xl border border-[var(--border)] bg-[rgba(17,24,39,0.88)] p-5 shadow-glow">
-            <h2 className="text-lg font-semibold text-white">Lead actions</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">{selectedLead.clientName || selectedLead.projectData?.projectName || selectedLead._id}</p>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <button className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-emerald-400/10" onClick={() => handleQuickStatusUpdate(selectedLead, "HOT")} type="button">Mark Hot</button>
-              <button className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-amber-400/10" onClick={() => handleQuickStatusUpdate(selectedLead, "WARM")} type="button">Mark Warm</button>
-              <button className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-sky-400/10" onClick={() => handleQuickStatusUpdate(selectedLead, "COLD")} type="button">Mark Cold</button>
-              <button className="rounded-xl border border-[var(--border)] bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-cyan-400/10" onClick={() => handleQuickStatusUpdate(selectedLead, "WON")} type="button">Mark Won</button>
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map((card) => (
+            <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm font-medium text-slate-500">{card.label}</p>
+              <p className="mt-3 text-3xl font-semibold text-slate-900">{loading ? "—" : card.value}</p>
+              <p className="mt-2 text-sm text-slate-500">{card.helper}</p>
             </div>
+          ))}
+        </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm text-white">Notes</label>
-                <textarea className="mt-2 min-h-32 w-full rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.8)] px-4 py-3 text-white outline-none" value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} />
-                <button className="mt-3 rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950" onClick={handleSaveNotes} type="button">Save notes</button>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] bg-[rgba(15,23,42,0.65)] p-4 text-sm text-white">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-[var(--muted)]">Project data</div>
-                <pre className="overflow-auto text-xs leading-6 text-cyan-100">{JSON.stringify(selectedLead.projectData || {}, null, 2)}</pre>
-              </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-900">Daily usage</h2>
+              <p className="text-sm text-slate-500">Activity volume across the recent reporting window.</p>
+            </div>
+            <div className="h-80 w-full">
+              {loading ? (
+                <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500">
+                  Loading chart...
+                </div>
+              ) : dashboardData.dailyUsage.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dashboardData.dailyUsage} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#64748b" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#64748b" allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      name="Usage"
+                      stroke="#0f172a"
+                      strokeWidth={3}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500">
+                  No usage data available.
+                </div>
+              )}
             </div>
           </section>
-        ) : null}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-900">Revenue trend</h2>
+              <p className="text-sm text-slate-500">Daily revenue derived from optimized and fallback price values.</p>
+            </div>
+            <div className="h-80 w-full">
+              {loading ? (
+                <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500">
+                  Loading chart...
+                </div>
+              ) : dashboardData.revenueChart.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dashboardData.revenueChart} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#64748b" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
+                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                    <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Revenue"
+                      stroke="#2563eb"
+                      fill="#bfdbfe"
+                      strokeWidth={3}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500">
+                  No revenue data available.
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

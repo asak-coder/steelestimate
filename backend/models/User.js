@@ -27,6 +27,57 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: USER_ROLES,
     default: 'VIEWER'
+  },
+  planType: {
+    type: String,
+    default: 'free',
+    index: true
+  },
+  planExpiry: {
+    type: Date,
+    default: null
+  },
+  subscription: {
+    plan: {
+      type: String,
+      default: 'free'
+    },
+    status: {
+      type: String,
+      default: 'free'
+    },
+    premium: {
+      type: Boolean,
+      default: false
+    },
+    startDate: {
+      type: Date,
+      default: null
+    },
+    endDate: {
+      type: Date,
+      default: null
+    },
+    razorpayOrderId: {
+      type: String,
+      default: null
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: null
+    },
+    razorpaySignature: {
+      type: String,
+      default: null
+    },
+    razorpaySubscriptionId: {
+      type: String,
+      default: null
+    },
+    payment: {
+      type: Object,
+      default: {}
+    }
   }
 }, {
   timestamps: true

@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminNav from "../../../components/admin/AdminNav";
-import { getAdminLeads } from "../../../lib/api";
+import { getAdminUsers } from "../../../lib/api";
 import { hasValidSession, onAuthChange } from "../../../lib/auth";
 
-const LEADS_PATH = "/admin/leads";
+const USERS_PATH = "/admin/users";
 
 function toNumber(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -20,14 +20,6 @@ function toNumber(value) {
   return 0;
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(toNumber(value));
-}
-
 function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -35,23 +27,27 @@ function formatDate(value) {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function AdminLeadsPage() {
+function getStatus(value) {
+  return value ? String(value) : "Inactive";
+}
+
+export default function AdminUsersPage() {
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [leads, setLeads] = useState([]);
+  const [users, setUsers] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!hasValidSession()) {
-      router.replace(`${"/admin/login"}?next=${encodeURIComponent(LEADS_PATH)}`);
+      router.replace(`${"/admin/login"}?next=${encodeURIComponent(USERS_PATH)}`);
       return undefined;
     }
 
     setIsReady(true);
     const unsubscribe = onAuthChange(() => {
       if (!hasValidSession()) {
-        router.replace(`${"/admin/login"}?next=${encodeURIComponent(LEADS_PATH)}`);
+        router.replace(`${"/admin/login"}?next=${encodeURIComponent(USERS_PATH)}`);
       }
     });
 
@@ -67,15 +63,15 @@ export default function AdminLeadsPage() {
 
     let cancelled = false;
 
-    async function loadLeads() {
+    async function loadUsers() {
       setLoading(true);
       setError("");
 
       try {
-        const response = await getAdminLeads();
+        const response = await getAdminUsers();
         const payload = response?.data ?? response ?? {};
-        const list = Array.isArray(payload.leads)
-          ? payload.leads
+        const list = Array.isArray(payload.users)
+          ? payload.users
           : Array.isArray(payload.data)
           ? payload.data
           : Array.isArray(payload.items)
@@ -85,11 +81,11 @@ export default function AdminLeadsPage() {
           : [];
 
         if (!cancelled) {
-          setLeads(list);
+          setUsers(list);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err?.message || "Failed to load leads.");
+          setError(err?.message || "Failed to load users.");
         }
       } finally {
         if (!cancelled) {
@@ -98,23 +94,37 @@ export default function AdminLeadsPage() {
       }
     }
 
-    loadLeads();
+    loadUsers();
 
     return () => {
       cancelled = true;
     };
   }, [isReady]);
 
-  const normalizedLeads = useMemo(() => {
-    return leads.map((lead, index) => ({
-      id: lead?.id ?? lead?._id ?? lead?.leadId ?? `${lead?.name ?? "lead"}-${lead?.createdAt ?? index}`,
-      name: lead?.name ?? lead?.contactName ?? "Unnamed lead",
-      phone: lead?.phone ?? lead?.contactPhone ?? "—",
-      project: lead?.project ?? lead?.projectName ?? lead?.projectType ?? "—",
-      estimatedCost: lead?.estimatedCost ?? lead?.optimizedPrice ?? lead?.cost ?? 0,
-      createdAt: lead?.createdAt ?? null,
-    }));
-  }, [leads]);
+  const normalizedUsers = useMemo(() => {
+    return users.map((user, index) => {
+      const planType = user?.planType ?? user?.subscription?.planType ?? user?.plan?.type ?? "Free";
+      const planExpiry = user?.planExpiry ?? user?.subscription?.endDate ?? user?.subscription?.expiryDate ?? null;
+      const role = user?.role ?? "user";
+      const isActive = Boolean(
+        user?.subscription?.premium ||
+          (planType && String(planType).toLowerCase() !== "free") ||
+          (planExpiry && !Number.isNaN(new Date(planExpiry).getTime()) && new Date(planExpiry) > new Date())
+      );
+
+      return {
+        id: user?.id ?? user?._id ?? user?.userId ?? `${user?.email ?? "user"}-${user?.createdAt ?? index}`,
+        name: user?.name ?? user?.fullName ?? "Unnamed user",
+        email: user?.email ?? "—",
+        role,
+        planType,
+        planExpiry,
+        status: isActive ? "Active" : "Inactive",
+        createdAt: user?.createdAt ?? user?.subscription?.startDate ?? null,
+        revenue: toNumber(user?.revenue ?? user?.subscription?.amount ?? 0),
+      };
+    });
+  }, [users]);
 
   if (!isReady) {
     return (
@@ -134,9 +144,9 @@ export default function AdminLeadsPage() {
         <div className="mb-6">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">Admin management</p>
           <div className="mt-2">
-            <h1 className="text-3xl font-semibold text-slate-900">Leads</h1>
+            <h1 className="text-3xl font-semibold text-slate-900">Users</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Track incoming projects and their estimated values.
+              Review account roles, plans, and expiry information.
             </p>
           </div>
         </div>
@@ -152,17 +162,10 @@ export default function AdminLeadsPage() {
         <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-slate-500">Total leads</p>
-              <p className="text-2xl font-semibold text-slate-900">{loading ? "—" : normalizedLeads.length}</p>
+              <p className="text-sm text-slate-500">Total records</p>
+              <p className="text-2xl font-semibold text-slate-900">{loading ? "—" : normalizedUsers.length}</p>
             </div>
-            <div>
-              <p className="text-sm text-slate-500">Estimated pipeline value</p>
-              <p className="text-2xl font-semibold text-slate-900">
-                {loading
-                  ? "—"
-                  : formatCurrency(normalizedLeads.reduce((sum, lead) => sum + toNumber(lead.estimatedCost), 0))}
-              </p>
-            </div>
+            <div className="text-sm text-slate-500">Showing recent user summaries from the admin API.</div>
           </div>
         </div>
 
@@ -172,33 +175,35 @@ export default function AdminLeadsPage() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Project</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Estimated cost</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Plan</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Expiry</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
-                      Loading leads...
+                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                      Loading users...
                     </td>
                   </tr>
-                ) : normalizedLeads.length > 0 ? (
-                  normalizedLeads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-4 text-sm font-medium text-slate-900">{lead.name}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{lead.phone}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{lead.project}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{formatCurrency(lead.estimatedCost)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{formatDate(lead.createdAt)}</td>
+                ) : normalizedUsers.length > 0 ? (
+                  normalizedUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-4 text-sm font-medium text-slate-900">{user.name}</td>
+                      <td className="px-4 py-4 text-sm text-slate-600">{user.email}</td>
+                      <td className="px-4 py-4 text-sm text-slate-600">{user.role}</td>
+                      <td className="px-4 py-4 text-sm text-slate-600">{user.planType}</td>
+                      <td className="px-4 py-4 text-sm text-slate-600">{getStatus(user.status)}</td>
+                      <td className="px-4 py-4 text-sm text-slate-600">{formatDate(user.planExpiry)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
-                      No leads found.
+                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                      No users found.
                     </td>
                   </tr>
                 )}

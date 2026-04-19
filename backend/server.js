@@ -7,6 +7,10 @@ const securityMiddleware = require('./middleware/security');
 const authRoutes = require('./routes/authRoutes');
 const v1AuthRoutes = require('./routes/v1/authRoutes');
 const sectionRoutes = require('./routes/sectionRoutes');
+const boqRoutes = require('./routes/boqRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const estimateRoutes = require('./routes/v1/estimateRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -18,7 +22,13 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 app.use(securityMiddleware);
 
@@ -29,6 +39,11 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/v1/auth', v1AuthRoutes);
 app.use('/api/sections', sectionRoutes);
+app.use('/api/boq', boqRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api', paymentRoutes);
+app.use('/api/v1/estimate', estimateRoutes);
+app.use('/api/v1/estimates', estimateRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

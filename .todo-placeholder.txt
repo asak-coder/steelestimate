@@ -1,5 +1,7 @@
-- [ ] Inspect `frontend/components/AuthGuard.js` and surrounding auth flow
-- [ ] Update auth guard to always resolve loading and handle 200/401 correctly
-- [ ] Ensure redirect behavior sends unauthenticated users to `/admin/login`
-- [ ] Verify no repeated auth checks or infinite loading state
-- [ ] Confirm the implementation matches the existing Next.js App Router codebase
+- [ ] Add usage logging model and middleware
+- [ ] Add subscription/payment backend endpoints
+- [ ] Wire plan gating into calculation and BOQ routes
+- [ ] Expose plan-aware user/session fields
+- [ ] Update frontend API helpers and pricing page
+- [ ] Test the app and verify the changes
+- [ ] Prepare git deploy commit
