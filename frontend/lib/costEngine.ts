@@ -1,5 +1,5 @@
-export const BOQ_FABRICATION_RATE_PER_KG = 50;
-export const BOQ_ERECTION_RATE_PER_KG = 25;
+export const BOQ_FABRICATION_RATE_PER_KG = 80;
+export const BOQ_ERECTION_RATE_PER_KG = 70;
 
 export function calculateBoqRowCost(weightKg: number) {
   const weight = Number.isFinite(weightKg) ? Math.max(0, weightKg) : 0;

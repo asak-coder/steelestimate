@@ -6,7 +6,8 @@ import { calculateWeight, type MsSectionType, type MsWeightResult } from "@/lib/
 import type { StandardSection } from "@/lib/isDatabase";
 
 type StandardKey = Extract<MsSectionType, "ISMB" | "ISMC" | "ISA">;
-type SectionRecord = Record<StandardKey, StandardSection[]>;
+type SmartSection = StandardSection & { designation: string };
+type SectionRecord = Record<StandardKey, SmartSection[]>;
 
 type LeadFormState = {
   name: string;
@@ -39,6 +40,9 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+const normalizeSectionLabel = (item: any) =>
+  String(item?.designation ?? item?.name ?? item?.size ?? "").trim();
+
 export default function MsWeightPage() {
   const [sectionType, setSectionType] = useState<StandardKey>("ISMB");
   const [sectionsByType, setSectionsByType] = useState<SectionRecord>({
@@ -46,7 +50,10 @@ export default function MsWeightPage() {
     ISMC: [],
     ISA: [],
   });
-  const [sectionSize, setSectionSize] = useState("");
+  const [selectedSectionDesignation, setSelectedSectionDesignation] = useState("");
+  const [sectionSearch, setSectionSearch] = useState("");
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(0);
   const [lengthM, setLengthM] = useState("6");
   const [quantity, setQuantity] = useState("1");
   const [loadingSections, setLoadingSections] = useState(true);
@@ -83,12 +90,13 @@ export default function MsWeightPage() {
 
             const normalized = items
               .map((item: any) => {
-                const size = String(item?.designation ?? item?.name ?? item?.size ?? "").trim();
+                const designation = normalizeSectionLabel(item);
+                const size = designation;
                 const weightPerMeter = Number(item?.weightPerMeter ?? item?.weight ?? 0);
-                return size ? ({ size, weightPerMeter } as StandardSection) : null;
+                return designation ? ({ designation, size, weightPerMeter } as SmartSection) : null;
               })
-              .filter((item: StandardSection | null): item is StandardSection => Boolean(item))
-              .sort((a: StandardSection, b: StandardSection) => a.size.localeCompare(b.size, undefined, { numeric: true }));
+              .filter((item: SmartSection | null): item is SmartSection => Boolean(item))
+              .sort((a: SmartSection, b: SmartSection) => a.designation.localeCompare(b.designation, undefined, { numeric: true }));
 
             return [key, normalized] as const;
           })
@@ -108,13 +116,16 @@ export default function MsWeightPage() {
         const firstAvailableType = sectionOptions.find(({ key }) => nextSections[key].length)?.key;
         if (!firstAvailableType) {
           setSectionType("ISMB");
-          setSectionSize("");
+          setSelectedSectionDesignation("");
+          setSectionSearch("");
           setSectionError("No sections available");
           return;
         }
 
+        const firstSection = nextSections[firstAvailableType][0];
         setSectionType(firstAvailableType);
-        setSectionSize(nextSections[firstAvailableType][0]?.size ?? "");
+        setSelectedSectionDesignation(firstSection?.designation ?? "");
+        setSectionSearch(firstSection?.designation ?? "");
       } catch (error) {
         if (!cancelled) {
           setSectionError("Failed to load sections");
@@ -134,16 +145,53 @@ export default function MsWeightPage() {
   const activeSections = useMemo(() => sectionsByType[sectionType] || [], [sectionType, sectionsByType]);
 
   useEffect(() => {
-    if (!activeSections.length) return;
-    const hasCurrentSize = activeSections.some((section) => section.size === sectionSize);
-    if (!hasCurrentSize) {
-      setSectionSize(activeSections[0]?.size ?? "");
+    if (!activeSections.length) {
+      if (selectedSectionDesignation || sectionSearch) {
+        setSelectedSectionDesignation("");
+        setSectionSearch("");
+      }
+      return;
     }
-  }, [activeSections, sectionSize]);
+
+    const selectedExists = activeSections.some((section) => section.designation === selectedSectionDesignation);
+
+    if (!selectedExists) {
+      const firstSection = activeSections[0];
+      setSelectedSectionDesignation(firstSection?.designation ?? "");
+      setSectionSearch(firstSection?.designation ?? "");
+      setHighlightedSuggestionIndex(0);
+    }
+  }, [activeSections, sectionSearch, selectedSectionDesignation]);
+
+  useEffect(() => {
+    if (!sectionSearch.trim()) {
+      setHighlightedSuggestionIndex(0);
+      return;
+    }
+
+    const exactMatch = activeSections.find(
+      (section) => section.designation.toLowerCase() === sectionSearch.trim().toLowerCase()
+    );
+
+    if (exactMatch && exactMatch.designation !== selectedSectionDesignation) {
+      setSelectedSectionDesignation(exactMatch.designation);
+    }
+
+    setHighlightedSuggestionIndex(0);
+  }, [activeSections, sectionSearch, selectedSectionDesignation]);
+
+  const filteredSections = useMemo(() => {
+    const search = sectionSearch.trim().toLowerCase();
+    const matches = search
+      ? activeSections.filter((section) => section.designation.toLowerCase().includes(search))
+      : activeSections;
+
+    return matches.slice(0, 10);
+  }, [activeSections, sectionSearch]);
 
   const selectedSection = useMemo(
-    () => activeSections.find((section) => section.size === sectionSize) ?? activeSections[0],
-    [activeSections, sectionSize]
+    () => activeSections.find((section) => section.designation === selectedSectionDesignation) ?? activeSections[0],
+    [activeSections, selectedSectionDesignation]
   );
 
   const lengthValue = Number(lengthM);
@@ -151,7 +199,7 @@ export default function MsWeightPage() {
   const validationError =
     !selectedSection
       ? activeSections.length
-        ? "Please select a section size"
+        ? "Please select a section"
         : "No sections available"
       : !Number.isFinite(lengthValue) || lengthValue <= 0
         ? "Enter a valid length in meters"
@@ -160,7 +208,7 @@ export default function MsWeightPage() {
           : "";
 
   const result: MsWeightResult = calculateWeight(sectionType, {
-    size: selectedSection?.size,
+    size: selectedSection?.designation,
     lengthM: Number.isFinite(lengthValue) && lengthValue > 0 ? lengthValue : 0,
     quantity: Number.isFinite(quantityValue) && quantityValue > 0 ? quantityValue : 0,
     weightPerMeter: selectedSection?.weightPerMeter ?? 0,
@@ -190,6 +238,55 @@ export default function MsWeightPage() {
     setLeadFormOpen(false);
   };
 
+  const selectSection = (section: SmartSection) => {
+    setSelectedSectionDesignation(section.designation);
+    setSectionSearch(section.designation);
+    setIsSuggestionOpen(false);
+    setHighlightedSuggestionIndex(0);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSectionSearch(value);
+    setIsSuggestionOpen(true);
+    setHighlightedSuggestionIndex(0);
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!filteredSections.length) {
+      if (event.key === "Escape") {
+        setIsSuggestionOpen(false);
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsSuggestionOpen(true);
+      setHighlightedSuggestionIndex((current) => (current + 1) % filteredSections.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsSuggestionOpen(true);
+      setHighlightedSuggestionIndex((current) => (current - 1 + filteredSections.length) % filteredSections.length);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (isSuggestionOpen && filteredSections[highlightedSuggestionIndex]) {
+        event.preventDefault();
+        selectSection(filteredSections[highlightedSuggestionIndex]);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsSuggestionOpen(false);
+    }
+  };
+
   const submitLead = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLeadSubmitting(true);
@@ -214,7 +311,7 @@ export default function MsWeightPage() {
           sectionType: sectionType,
           materialType: sectionType,
           sectionName: result.sectionName,
-          sectionSize: selectedSection?.size ?? "",
+          sectionSize: selectedSection?.designation ?? "",
           lengthM: Number(lengthM) || 0,
           quantity: Number(quantity) || 0,
           weight: weightKg,
@@ -263,6 +360,8 @@ export default function MsWeightPage() {
       setLeadSubmitting(false);
     }
   };
+
+  const showSuggestions = isSuggestionOpen && (filteredSections.length > 0 || sectionSearch.trim().length > 0);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
@@ -326,8 +425,8 @@ export default function MsWeightPage() {
               MS Weight Calculator
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 sm:text-base">
-              Select an IS section, pick a size from the live API, calculate total weight, and instantly turn
-              the result into an estimated project cost with lead capture.
+              Select an IS section, search instantly by designation, calculate total weight, and turn the
+              result into an estimated project cost with lead capture.
             </p>
           </div>
 
@@ -343,7 +442,14 @@ export default function MsWeightPage() {
                       <button
                         key={option.key}
                         type="button"
-                        onClick={() => setSectionType(option.key)}
+                        onClick={() => {
+                          setSectionType(option.key);
+                          const nextSection = sectionsByType[option.key]?.[0];
+                          setSelectedSectionDesignation(nextSection?.designation ?? "");
+                          setSectionSearch(nextSection?.designation ?? "");
+                          setHighlightedSuggestionIndex(0);
+                          setIsSuggestionOpen(false);
+                        }}
                         className={`rounded-xl border px-4 py-3 text-sm font-medium transition ${
                           sectionType === option.key
                             ? "border-blue-500/40 bg-blue-500/10 text-blue-100"
@@ -357,26 +463,71 @@ export default function MsWeightPage() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
+                  <div className="relative">
                     <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Section Size
+                      Section Search
                     </label>
-                    <select
-                      value={sectionSize}
-                      onChange={(e) => setSectionSize(e.target.value)}
-                      disabled={loadingSections}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500"
-                    >
-                      {activeSections.length ? (
-                        activeSections.map((section) => (
-                          <option key={section.size} value={section.size}>
-                            {section.size}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="">No sections available</option>
-                      )}
-                    </select>
+                    <input
+                      value={sectionSearch}
+                      onChange={(event) => handleSearchChange(event.target.value)}
+                      onFocus={() => setIsSuggestionOpen(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setIsSuggestionOpen(false), 120);
+                      }}
+                      onKeyDown={handleSearchKeyDown}
+                      placeholder="Search section (e.g. ISMB 200)"
+                      disabled={loadingSections || !activeSections.length}
+                      aria-expanded={showSuggestions}
+                      aria-autocomplete="list"
+                      aria-controls="section-suggestions-list"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-500"
+                    />
+
+                    {showSuggestions ? (
+                      <div className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl shadow-black/40">
+                        <div
+                          id="section-suggestions-list"
+                          role="listbox"
+                          className="max-h-80 overflow-auto py-2"
+                        >
+                          {filteredSections.length ? (
+                            filteredSections.map((section, index) => {
+                              const isSelected = section.designation === selectedSectionDesignation;
+                              const isHighlighted = index === highlightedSuggestionIndex;
+                              return (
+                                <button
+                                  key={`${section.designation}-${section.weightPerMeter}`}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    selectSection(section);
+                                  }}
+                                  className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm transition ${
+                                    isHighlighted
+                                      ? "bg-blue-500/10 text-white"
+                                      : "text-slate-200 hover:bg-slate-900"
+                                  } ${isSelected ? "ring-1 ring-inset ring-blue-400/40" : ""}`}
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block truncate font-medium">{section.designation}</span>
+                                    <span className="mt-0.5 block text-xs text-slate-400">
+                                      {isSelected ? "Selected section" : "Click to select"}
+                                    </span>
+                                  </span>
+                                  <span className="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-300">
+                                    {formatNumber(section.weightPerMeter)} kg/m
+                                  </span>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="px-4 py-3 text-sm text-slate-400">No matching sections found</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <Field
@@ -404,6 +555,13 @@ export default function MsWeightPage() {
                     readOnly
                   />
                 </div>
+
+                {selectedSection ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
+                    Selected section:{" "}
+                    <span className="font-semibold text-blue-100">{selectedSection.designation}</span>
+                  </div>
+                ) : null}
               </div>
             </section>
 
@@ -411,6 +569,12 @@ export default function MsWeightPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
                 Live calculation
               </p>
+
+              {validationError ? (
+                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                  {validationError}
+                </div>
+              ) : null}
 
               <div className="mt-4 space-y-4">
                 <SummaryRow label="Section" value={result.sectionName} />
@@ -449,7 +613,9 @@ export default function MsWeightPage() {
               </div>
 
               <div className="mt-6 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                <p className="text-sm font-semibold text-blue-100">🚀 Get Detailed BOQ + Official Quotation (Within 24 Hours)</p>
+                <p className="text-sm font-semibold text-blue-100">
+                  🚀 Get Detailed BOQ + Official Quotation (Within 24 Hours)
+                </p>
                 <p className="mt-1 text-sm leading-6 text-slate-200">
                   Capture project details, share the estimate with our team, and reach us instantly on WhatsApp.
                 </p>
@@ -616,7 +782,7 @@ function Field({
         type={type}
         step={step}
         readOnly={readOnly}
-        className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500 read-only:cursor-not-allowed read-only:bg-slate-900/80"
+        className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-500 read-only:cursor-not-allowed read-only:bg-slate-900/80"
       />
     </div>
   );

@@ -26,6 +26,7 @@ const SOURCE_OPTIONS = [
   { value: "", label: "All sources" },
   { value: "calculator", label: "Calculator" },
   { value: "ai", label: "AI" },
+  { value: "AI_ESTIMATOR", label: "AI Estimator" },
   { value: "boq", label: "BOQ" },
   { value: "mobile", label: "Mobile" },
   { value: "admin", label: "Admin" },
@@ -106,6 +107,9 @@ function getSourceLabel(source) {
       return "Calculator";
     case "ai":
       return "AI";
+    case "ai_estimator":
+    case "AI_ESTIMATOR":
+      return "AI Estimator";
     case "boq":
       return "BOQ";
     case "mobile":
@@ -246,7 +250,7 @@ export default function AdminLeadsPage() {
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       },
-      { calculator: 0, ai: 0, boq: 0, mobile: 0, admin: 0, api: 0 }
+      { calculator: 0, ai: 0, AI_ESTIMATOR: 0, boq: 0, mobile: 0, admin: 0, api: 0 }
     );
   }, [normalizedLeads]);
 

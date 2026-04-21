@@ -48,6 +48,18 @@ const leadSchema = new mongoose.Schema({
     min: 0,
   },
 
+  area: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
+  steel: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
   projectType: {
     type: String,
     trim: true,
@@ -56,7 +68,7 @@ const leadSchema = new mongoose.Schema({
 
   source: {
     type: String,
-    enum: ['calculator', 'ai', 'boq', 'mobile', 'admin', 'api'],
+    enum: ['calculator', 'ai', 'ai_estimator', 'boq', 'mobile', 'admin', 'api'],
     default: 'calculator',
   },
 

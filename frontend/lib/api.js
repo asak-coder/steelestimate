@@ -204,6 +204,8 @@ export async function createOrder(planKeyOrPayload) {
 export const subscribeOrder = createSubscribeOrder;
 
 const paymentVerifyEndpoints = ['/api/subscribe/verify', '/api/verify-payment', '/api/payment/verify'];
+const sectionsCache = new Map();
+const sectionsPromiseCache = new Map();
 
 export async function verifyPayment(payload) {
   const requestBody =
@@ -247,8 +249,35 @@ export const verifySubscriptionPayment = verifyPayment;
 export const fetchPlans = getPlans;
 
 export async function getSections(type) {
-  const data = await request(`/api/sections/${type}`, { method: 'GET' });
-  return unwrapData(data);
+  const cacheKey = String(type || '').trim().toUpperCase();
+  if (!cacheKey) {
+    return [];
+  }
+
+  if (sectionsCache.has(cacheKey)) {
+    return sectionsCache.get(cacheKey);
+  }
+
+  if (sectionsPromiseCache.has(cacheKey)) {
+    return sectionsPromiseCache.get(cacheKey);
+  }
+
+  const pending = (async () => {
+    const data = await request(`/api/sections/${cacheKey}`, { method: 'GET' });
+    const unwrapped = unwrapData(data);
+    sectionsCache.set(cacheKey, unwrapped);
+    sectionsPromiseCache.delete(cacheKey);
+    return unwrapped;
+  })();
+
+  sectionsPromiseCache.set(cacheKey, pending);
+
+  try {
+    return await pending;
+  } catch (error) {
+    sectionsPromiseCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 export async function createLead(payload) {
@@ -432,17 +461,9 @@ export async function getBoqProjectById(id) {
 }
 
 export async function saveBoqProject(payload) {
-  const body = payload?.id || payload?._id ? payload : payload;
-  if (body?.id || body?._id) {
-    return request(`/api/boq/${body.id || body._id}`, {
-      method: 'PATCH',
-      body,
-    });
-  }
-
-  return request('/api/boq', {
+  return request('/api/boq/save', {
     method: 'POST',
-    body,
+    body: payload,
   });
 }
 

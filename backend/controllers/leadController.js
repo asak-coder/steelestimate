@@ -10,10 +10,10 @@ const legacyStatusMap = {
   contacted: 'IN_PROGRESS',
   converted: 'COMPLETED'
 };
-const allowedSources = ['calculator', 'ai', 'boq', 'mobile', 'admin', 'api'];
+const allowedSources = ['calculator', 'ai', 'AI_ESTIMATOR', 'boq', 'mobile', 'admin', 'api'];
 const allowedPriorities = ['normal', 'high'];
 const statusKeys = ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'];
-const sourceKeys = ['calculator', 'ai', 'boq', 'mobile', 'admin', 'api'];
+const sourceKeys = ['calculator', 'ai', 'AI_ESTIMATOR', 'boq', 'mobile', 'admin', 'api'];
 const adminOnlyFields = new Set([
   'score',
   'tag',
@@ -41,8 +41,19 @@ const normalizeEmail = (value) => {
 };
 const normalizePhone = (value) => normalizeString(value).replace(/[^\d+]/g, '');
 const normalizeSource = (value) => {
-  const source = normalizeString(value).toLowerCase();
-  return allowedSources.includes(source) ? source : 'calculator';
+  const source = normalizeString(value);
+  if (!source) return 'calculator';
+
+  if (source.toUpperCase() === 'AI_ESTIMATOR') {
+    return 'AI_ESTIMATOR';
+  }
+
+  const lowerSource = source.toLowerCase();
+  if (lowerSource === 'ai_estimator') {
+    return 'AI_ESTIMATOR';
+  }
+
+  return allowedSources.includes(lowerSource) ? lowerSource : 'calculator';
 };
 const normalizePriority = (value) => {
   const priority = normalizeString(value).toLowerCase();
@@ -220,6 +231,8 @@ const sanitizeLead = (lead) => ({
   message: lead.message,
   projectType: lead.projectType,
   estimatedCost: lead.estimatedCost,
+  area: lead.area,
+  steel: lead.steel,
   source: lead.source,
   priority: lead.priority,
   whatsappLink: lead.whatsappLink,
@@ -365,8 +378,9 @@ const buildLeadAggregationSummary = async () => {
   }, {});
   const sourceCounts = (stats?.sourceCounts || []).reduce((acc, source) => {
     const normalized = normalizeSource(source);
-    if (acc[normalized] !== undefined) {
-      acc[normalized] += 1;
+    const key = normalized === 'AI_ESTIMATOR' ? 'AI_ESTIMATOR' : normalized;
+    if (acc[key] !== undefined) {
+      acc[key] += 1;
     }
     return acc;
   }, baseSourceCounts);
@@ -412,6 +426,8 @@ const createLead = async (req, res, next) => {
     const email = normalizeEmail(payload.email);
     const projectType = extractProjectType(payload);
     const estimatedCost = extractEstimatedCost(payload);
+    const area = parseCostValue(payload.area || payload.projectData?.area || 0);
+    const steel = parseCostValue(payload.steel || payload.projectData?.steel || 0);
     const source = normalizeSource(payload.source || payload.leadSource || payload.origin);
     const priority = estimatedCost > 1000000 ? 'high' : normalizePriority(payload.priority);
     const scoreData = calculateLeadScore(payload.projectData || payload);
@@ -433,6 +449,8 @@ const createLead = async (req, res, next) => {
       email: email || undefined,
       projectType,
       estimatedCost,
+      area,
+      steel,
       source,
       priority,
       whatsappLink,
@@ -608,7 +626,10 @@ const updateLeadStatus = async (req, res, next) => {
 };
 
 const rescoreLead = async (lead) => {
-  const scoreData = calculateLeadScore(lead.projectData || {});
+  const scoreData = calculateLeadScore({
+    ...(lead.projectData || {}),
+    area: lead.area || lead.projectData?.area || 0
+  });
   lead.score = scoreData.score;
   lead.tag = scoreData.tag;
   return lead.save();

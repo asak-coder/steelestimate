@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { estimateWithAi, request } from "@/lib/api";
-import { hasValidSession } from "@/lib/auth";
+import { useMemo, useState } from "react";
+import { createLead, estimateWithAi } from "@/lib/api";
+import { buildBoqSavePayload } from "@/lib/boq";
 
-type ProjectType = "warehouse" | "industrial";
-type AccessStatus = "guest" | "free" | "paid";
+type ProjectType = "warehouse" | "shed" | "industrial";
 
 type AiEstimateResponse = {
   input?: {
@@ -51,8 +50,24 @@ type FormState = {
   location: string;
 };
 
+type LeadFormState = {
+  name: string;
+  phone: string;
+  email: string;
+  projectDetails: string;
+};
+
+type BoqRow = {
+  section: string;
+  quantity: number;
+  unit: string;
+  weightKg: number;
+  costInr: number;
+};
+
 const projectTypeOptions: { value: ProjectType; label: string; hint: string }[] = [
   { value: "warehouse", label: "Warehouse", hint: "4–6 kg/sqft" },
+  { value: "shed", label: "Shed", hint: "3.5–5 kg/sqft" },
   { value: "industrial", label: "Industrial", hint: "6–8 kg/sqft" },
 ];
 
@@ -63,96 +78,310 @@ const initialForm: FormState = {
   location: "Pune, India",
 };
 
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
-  }).format(value || 0);
+const initialLeadForm: LeadFormState = {
+  name: "",
+  phone: "",
+  email: "",
+  projectDetails: "",
+};
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-IN", {
+const STEEL_RATE_PER_KG = 150;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function round(value: number, digits = 2) {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function formatNumber(value: number, digits = 2) {
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : Math.min(digits, 2),
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value || 0);
+  }).format(Number.isFinite(value) ? value : 0);
+}
 
-const formatRange = (range?: RangeValue | null, digits = 2) => {
-  if (!range) return "—";
-  const min = new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: Number.isInteger(range.min) ? 0 : digits,
-  }).format(range.min || 0);
-  const max = new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: Number.isInteger(range.max) ? 0 : digits,
-  }).format(range.max || 0);
+function formatRange(value: RangeValue | undefined | null) {
+  if (!value) return "—";
+  const unit = value.unit ? ` ${value.unit}` : "";
+  return `${formatNumber(value.min)} to ${formatNumber(value.max)}${unit}`;
+}
 
-  return `${min} to ${max} ${range.unit}`;
-};
+function normalizePhone(value: string) {
+  return value.replace(/[^\d+]/g, "").trim();
+}
+
+function normalizePhoneForWhatsApp(value: string) {
+  return normalizePhone(value).replace(/^\+/, "");
+}
+
+function getProjectProfile(projectType: ProjectType) {
+  switch (projectType) {
+    case "industrial":
+      return { min: 6, max: 8, label: "Industrial" };
+    case "shed":
+      return { min: 3.5, max: 5, label: "Shed" };
+    case "warehouse":
+    default:
+      return { min: 4, max: 6, label: "Warehouse" };
+  }
+}
+
+function buildRuleBasedEstimate(area: number, projectType: ProjectType) {
+  const profile = getProjectProfile(projectType);
+  const minSteelKg = area * profile.min;
+  const maxSteelKg = area * profile.max;
+
+  return {
+    projectType: profile.label,
+    steelPerSqft: {
+      min: profile.min,
+      max: profile.max,
+      unit: "kg/sqft",
+    },
+    totalSteelKg: {
+      min: minSteelKg,
+      max: maxSteelKg,
+      unit: "kg",
+    },
+    totalSteelMt: {
+      min: minSteelKg / 1000,
+      max: maxSteelKg / 1000,
+      unit: "MT",
+    },
+    costPerKg: {
+      min: STEEL_RATE_PER_KG,
+      max: STEEL_RATE_PER_KG,
+      unit: "₹/kg",
+    },
+    costRangeInr: {
+      min: minSteelKg * STEEL_RATE_PER_KG,
+      max: maxSteelKg * STEEL_RATE_PER_KG,
+      unit: "INR",
+    },
+  };
+}
+
+function deriveBreakdown(projectType: ProjectType, totalSteelKg: number, aiSuggestion?: AiSuggestion) {
+  const suggestion = aiSuggestion?.optimizedRange;
+  const primaryPercent = clamp(Math.round(suggestion ? suggestion.steelPerSqft.min * 8 : projectType === "industrial" ? 58 : 60), 50, 72);
+  const secondaryPercent = clamp(Math.round(suggestion ? 100 - primaryPercent - 12 : projectType === "industrial" ? 20 : 18), 12, 34);
+  const claddingPercent = Math.max(0, 100 - primaryPercent - secondaryPercent);
+
+  const primaryKg = round(totalSteelKg * (primaryPercent / 100), 2);
+  const secondaryKg = round(totalSteelKg * (secondaryPercent / 100), 2);
+  const claddingKg = round(totalSteelKg * (claddingPercent / 100), 2);
+
+  return {
+    primaryPercent,
+    secondaryPercent,
+    claddingPercent,
+    primaryKg,
+    secondaryKg,
+    claddingKg,
+  };
+}
+
+function buildBoqRows(totalSteelKg: number, costInr: number, breakdown: ReturnType<typeof deriveBreakdown>): BoqRow[] {
+  return [
+    {
+      section: "Primary structural steel",
+      quantity: 1,
+      unit: "lot",
+      weightKg: breakdown.primaryKg,
+      costInr: round(costInr * (breakdown.primaryKg / Math.max(totalSteelKg, 1)), 0),
+    },
+    {
+      section: "Secondary members",
+      quantity: 1,
+      unit: "lot",
+      weightKg: breakdown.secondaryKg,
+      costInr: round(costInr * (breakdown.secondaryKg / Math.max(totalSteelKg, 1)), 0),
+    },
+    {
+      section: "Roof and wall cladding",
+      quantity: 1,
+      unit: "lot",
+      weightKg: breakdown.claddingKg,
+      costInr: round(costInr * (breakdown.claddingKg / Math.max(totalSteelKg, 1)), 0),
+    },
+  ];
+}
+
+function buildWhatsAppMessage({
+  projectType,
+  area,
+  height,
+  location,
+  steelKg,
+  costMin,
+  costMax,
+  name,
+  phone,
+  email,
+  projectDetails,
+}: {
+  projectType: ProjectType;
+  area: number;
+  height: number;
+  location: string;
+  steelKg: number;
+  costMin: number;
+  costMax: number;
+  name: string;
+  phone: string;
+  email: string;
+  projectDetails: string;
+}) {
+  return [
+    "Hello, I would like a quote for my project.",
+    "",
+    `Project type: ${projectType}`,
+    `Area: ${formatNumber(area, 0)} sqft`,
+    `Height: ${formatNumber(height, 1)} ft`,
+    `Location: ${location}`,
+    `Estimated steel: ${formatNumber(steelKg, 0)} kg`,
+    `Estimated cost: ${formatCurrency(costMin)} - ${formatCurrency(costMax)}`,
+    name ? `Name: ${name}` : "",
+    phone ? `Phone: ${phone}` : "",
+    email ? `Email: ${email}` : "",
+    projectDetails ? `Project details: ${projectDetails}` : "",
+    "",
+    "Please share the next steps and quotation details.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildWhatsAppUrl(message: string) {
+  const configuredNumber =
+    process.env.NEXT_PUBLIC_WHATSAPP_PHONE_NUMBER ||
+    process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ||
+    process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER ||
+    "";
+
+  const cleanNumber = normalizePhoneForWhatsApp(configuredNumber);
+  const encodedMessage = encodeURIComponent(message);
+
+  if (cleanNumber) {
+    return `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+  }
+
+  return `https://api.whatsapp.com/send?text=${encodedMessage}`;
+}
 
 export default function AiEstimatorPage() {
   const [form, setForm] = useState<FormState>(initialForm);
+  const [leadForm, setLeadForm] = useState<LeadFormState>(initialLeadForm);
   const [result, setResult] = useState<AiEstimateResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [leadLoading, setLeadLoading] = useState(false);
   const [error, setError] = useState("");
-  const [accessStatus, setAccessStatus] = useState<AccessStatus>("guest");
+  const [leadError, setLeadError] = useState("");
+  const [leadSuccess, setLeadSuccess] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
+  const area = Number(form.area);
+  const height = Number(form.height);
+  const canSubmit = Number.isFinite(area) && area > 0 && Number.isFinite(height) && height > 0 && form.location.trim().length > 0;
 
-    async function detectAccess() {
-      if (!hasValidSession()) {
-        if (!cancelled) setAccessStatus("guest");
-        return;
-      }
+  const ruleBased = useMemo(() => {
+    if (!canSubmit) return null;
+    return buildRuleBasedEstimate(area, form.projectType);
+  }, [area, canSubmit, form.projectType]);
 
-      try {
-        const profileResponse = await request("/api/auth/me", {
-          method: "GET",
-          redirectOnAuthError: false,
-        });
+  const aiSuggestion = result?.aiAdjustedSuggestion;
+  const aiExplanation =
+    aiSuggestion?.explanation ||
+    result?.explanation ||
+    "Run the estimator to get an AI-generated optimization note for the project layout and steel distribution.";
 
-        const profile = profileResponse?.user || profileResponse?.data || profileResponse?.result || profileResponse;
-        const planType = String(profile?.planType || profile?.plan || profile?.subscription?.plan || "free").toLowerCase();
+  const totalSteelKg = ruleBased ? ruleBased.totalSteelKg.max : 0;
+  const totalSteelMt = totalSteelKg / 1000;
+  const totalCostMin = ruleBased?.costRangeInr.min || 0;
+  const totalCostMax = ruleBased?.costRangeInr.max || 0;
+  const estimatedLeadCost = ruleBased ? Math.round((totalCostMin + totalCostMax) / 2) : 0;
 
-        if (!cancelled) {
-          setAccessStatus(planType && planType !== "free" ? "paid" : "free");
-        }
-      } catch (_) {
-        if (!cancelled) setAccessStatus("guest");
-      }
+  const breakdown = useMemo(() => {
+    if (!ruleBased) {
+      return {
+        primaryPercent: 0,
+        secondaryPercent: 0,
+        claddingPercent: 0,
+        primaryKg: 0,
+        secondaryKg: 0,
+        claddingKg: 0,
+      };
     }
 
-    detectAccess();
+    return deriveBreakdown(form.projectType, totalSteelKg, aiSuggestion || undefined);
+  }, [aiSuggestion, form.projectType, ruleBased, totalSteelKg]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const boqRows = useMemo(() => {
+    if (!ruleBased) return [];
+    return buildBoqRows(totalSteelKg, totalCostMax, breakdown);
+  }, [breakdown, ruleBased, totalCostMax, totalSteelKg]);
 
-  const isAuthenticated = accessStatus !== "guest";
-  const submitHref = accessStatus === "guest" ? "/admin/login?redirect=/tools/ai-estimator" : "/admin/dashboard";
+  const boqPayload = useMemo(() => {
+    if (!ruleBased) return null;
 
-  const ruleBased = result?.ruleBasedResult;
-  const aiSuggestion = result?.aiAdjustedSuggestion;
+    return buildBoqSavePayload(
+      boqRows.map((row) => ({
+        id: row.section,
+        type: "IS",
+        section: row.section,
+        dimensions: {
+          quantity: row.quantity,
+          unit: row.unit,
+          source: "ai-estimator",
+        },
+        quantity: row.quantity,
+        weight: row.weightKg,
+        cost: row.costInr,
+      })),
+      `AI Estimator - ${form.projectType}`,
+    );
+  }, [boqRows, form.projectType, ruleBased]);
 
-  const canSubmit = useMemo(() => {
-    const area = Number(form.area);
-    const height = Number(form.height);
-    return Boolean(form.projectType) && Number.isFinite(area) && area > 0 && Number.isFinite(height) && height >= 0;
-  }, [form.area, form.height, form.projectType]);
+  const whatsappMessage = useMemo(() => {
+    if (!ruleBased) return "";
+
+    return buildWhatsAppMessage({
+      projectType: form.projectType,
+      area,
+      height,
+      location: form.location.trim(),
+      steelKg: totalSteelKg,
+      costMin: totalCostMin,
+      costMax: totalCostMax,
+      name: leadForm.name.trim(),
+      phone: leadForm.phone.trim(),
+      email: leadForm.email.trim(),
+      projectDetails: leadForm.projectDetails.trim(),
+    });
+  }, [area, form.location, form.projectType, height, leadForm.email, leadForm.name, leadForm.phone, leadForm.projectDetails, ruleBased, totalCostMax, totalCostMin, totalSteelKg]);
+
+  const whatsappUrl = useMemo(() => {
+    if (!whatsappMessage) return "";
+    return buildWhatsAppUrl(whatsappMessage);
+  }, [whatsappMessage]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-
-    if (!isAuthenticated) {
-      setError("Sign in to run the AI estimator. Free accounts get limited usage; paid accounts get full access.");
-      return;
-    }
+    setLeadSuccess("");
 
     if (!canSubmit) {
-      setError("Please enter a valid area and height before generating the estimate.");
+      setError("Enter a valid project type, area, height, and location.");
       return;
     }
 
@@ -161,63 +390,109 @@ export default function AiEstimatorPage() {
     try {
       const payload = {
         projectType: form.projectType,
-        area: Number(form.area),
-        height: Number(form.height),
+        area,
+        height,
         location: form.location.trim(),
       };
 
       const response = (await estimateWithAi(payload)) as AiEstimateResponse & { data?: AiEstimateResponse };
-      const output = response?.data || response;
-
-      setResult(output || null);
+      setResult(response?.data || response || null);
     } catch (submitError: unknown) {
-      const apiError = submitError as {
-        status?: number;
-        data?: {
-          message?: string;
-        };
-      };
-
-      const status = apiError?.status;
-      if (status === 401) {
-        setError("Your session has expired. Please sign in again to continue.");
-      } else if (status === 429) {
-        setError(
-          apiError?.data?.message ||
-            "You have reached the daily AI estimate limit for your free plan. Upgrade for full access."
-        );
-      } else if (status === 403) {
-        setError(apiError?.data?.message || "This feature is available on paid plans only.");
-      } else {
-        setError(submitError instanceof Error ? submitError.message : "Unable to generate AI estimate at the moment.");
-      }
+      setError(submitError instanceof Error ? submitError.message : "Unable to generate estimate right now.");
     } finally {
       setLoading(false);
     }
   };
 
-  const explanation = aiSuggestion?.explanation || result?.explanation || "Run the estimator to see the AI explanation.";
+  const handleLeadSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLeadError("");
+    setLeadSuccess("");
+
+    if (!result || !ruleBased) {
+      setLeadError("Generate an estimate first.");
+      return;
+    }
+
+    const name = leadForm.name.trim();
+    const phone = normalizePhone(leadForm.phone);
+    const email = leadForm.email.trim();
+    const projectDetails = leadForm.projectDetails.trim();
+
+    if (!name || !phone || !email || !projectDetails) {
+      setLeadError("Please enter your name, phone, email, and project details.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLeadError("Please enter a valid email address.");
+      return;
+    }
+
+    setLeadLoading(true);
+
+    try {
+      const response = await createLead({
+        name,
+        clientName: name,
+        phone,
+        email,
+        message: projectDetails,
+        projectType: form.projectType,
+        area,
+        steel: totalSteelKg,
+        estimatedCost: estimatedLeadCost,
+        source: "AI_ESTIMATOR",
+        cost: {
+          estimatedCost: estimatedLeadCost,
+          minCost: totalCostMin,
+          maxCost: totalCostMax,
+          area,
+          steel: totalSteelKg,
+          projectType: form.projectType,
+          location: form.location.trim(),
+          source: "AI_ESTIMATOR",
+        },
+        projectData: {
+          projectType: form.projectType,
+          area,
+          height,
+          location: form.location.trim(),
+          projectDetails,
+        },
+      });
+
+      const savedLead = response?.data || response?.result || response || {};
+      const savedWhatsapp = response?.automation?.whatsappLink || whatsappUrl;
+
+      setLeadSuccess(
+        savedLead?.id
+          ? `Lead saved successfully${response?.automation?.emailSent ? " and confirmation email sent." : "."}`
+          : "Lead saved successfully."
+      );
+
+      if (savedWhatsapp) {
+        window.open(savedWhatsapp, "_blank", "noopener,noreferrer");
+      }
+    } catch (submitError: unknown) {
+      setLeadError(submitError instanceof Error ? submitError.message : "Unable to save your lead right now.");
+    } finally {
+      setLeadLoading(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
       <section className="mx-auto max-w-7xl">
         <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 shadow-2xl shadow-black/30">
           <div className="border-b border-slate-800 px-6 py-6 sm:px-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">AI estimation tool</p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                AI-assisted EPC estimation engine
-              </h1>
-              <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-100">
-                Free: limited AI usage
-              </span>
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-                Paid: full access
-              </span>
-            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">AI estimator</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              Steel project estimator
+            </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 sm:text-base">
-              Estimate steel consumption and project cost for EPC structures using a hybrid rule-based and AI-adjusted
-              workflow designed for India.
+              Turn minimal input into a near-complete project estimate with steel consumption, cost range, AI guidance,
+              BOQ-ready output, and a lead capture flow that converts estimates into conversations.
             </p>
           </div>
 
@@ -234,7 +509,7 @@ export default function AiEstimatorPage() {
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                     Project Type
                   </label>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
                     {projectTypeOptions.map((option) => (
                       <button
                         key={option.value}
@@ -262,7 +537,7 @@ export default function AiEstimatorPage() {
                     step="1"
                   />
                   <Field
-                    label="Height (m)"
+                    label="Height (ft)"
                     type="number"
                     value={form.height}
                     onChange={(value) => setForm((current) => ({ ...current, height: value }))}
@@ -277,28 +552,6 @@ export default function AiEstimatorPage() {
                   onChange={(value) => setForm((current) => ({ ...current, location: value }))}
                 />
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-                  <p className="text-sm font-semibold text-slate-100">Feature gating</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {accessStatus === "guest"
-                      ? "Sign in to use the AI estimator. Free accounts get limited daily usage, while paid accounts get full access."
-                      : accessStatus === "paid"
-                        ? "You are on a paid plan with full AI access."
-                        : "You are on a free plan. AI usage is limited by daily quota."}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Link
-                      href={submitHref}
-                      className="inline-flex items-center justify-center rounded-xl border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-100 transition hover:border-blue-400 hover:bg-blue-500/20"
-                    >
-                      {accessStatus === "guest" ? "Sign in to continue" : "Open account dashboard"}
-                    </Link>
-                    <span className="inline-flex items-center rounded-xl border border-slate-700 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
-                      {accessStatus === "paid" ? "Full access enabled" : "Limited AI usage on free plan"}
-                    </span>
-                  </div>
-                </div>
-
                 <button
                   type="submit"
                   disabled={loading || !canSubmit}
@@ -312,62 +565,190 @@ export default function AiEstimatorPage() {
             <aside className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5 sm:p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Estimate output</p>
 
-              <div className="mt-4 space-y-4">
-                <ResultCard
-                  label="Rule-based steel range"
-                  value={formatRange(ruleBased?.steelPerSqft)}
-                  note="Warehouse: 4–6 kg/sqft · Industrial: 6–8 kg/sqft"
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <MetricCard label="Total steel" value={`${formatNumber(totalSteelMt, 3)} MT`} note="Rule engine output" />
+                <MetricCard
+                  label="Cost range"
+                  value={`${formatCurrency(totalCostMin)} - ${formatCurrency(totalCostMax)}`}
+                  note={`₹${STEEL_RATE_PER_KG}/kg total cost`}
                 />
-                <ResultCard
-                  label="Rule-based steel total"
-                  value={formatRange(ruleBased?.totalSteelKg)}
-                  note="Computed as area × steel consumption"
+                <MetricCard
+                  label="Primary structure"
+                  value={`${breakdown.primaryPercent}%`}
+                  note={`${formatNumber(breakdown.primaryKg, 0)} kg`}
                 />
-                <ResultCard
-                  label="Rule-based cost range"
-                  value={formatRange(ruleBased?.costRangeInr)}
-                  note="Using ₹70–₹90 per kg"
+                <MetricCard
+                  label="Secondary structure"
+                  value={`${breakdown.secondaryPercent}%`}
+                  note={`${formatNumber(breakdown.secondaryKg, 0)} kg`}
+                />
+                <MetricCard
+                  label="Cladding"
+                  value={`${breakdown.claddingPercent}%`}
+                  note={`${formatNumber(breakdown.claddingKg, 0)} kg`}
+                />
+                <MetricCard
+                  label="Height"
+                  value={`${formatNumber(height, 1)} ft`}
+                  note={form.location.trim()}
                 />
               </div>
 
               <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
-                  AI-adjusted suggestion
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">AI explanation</p>
+                <p className="mt-3 text-sm leading-6 text-slate-100">{aiExplanation}</p>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-200">Get quote on WhatsApp</p>
+                <p className="mt-3 text-sm leading-6 text-slate-100">
+                  Pre-filled with the current estimate and any contact details you add below.
                 </p>
-                <div className="mt-3 space-y-3">
-                  <ResultLine label="Optimized steel range" value={formatRange(aiSuggestion?.optimizedRange?.steelPerSqft)} />
-                  <ResultLine label="Optimized total steel" value={formatRange(aiSuggestion?.optimizedRange?.totalSteelKg)} />
-                  <ResultLine label="Optimized cost range" value={formatRange(aiSuggestion?.optimizedRange?.costRangeInr)} />
-                  <ResultLine label="AI status" value={result?.meta?.usedAi ? "AI model used" : "Fallback optimization used"} />
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <a
+                    href={whatsappUrl || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-disabled={!whatsappUrl}
+                    className={`inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition ${
+                      whatsappUrl
+                        ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                        : "cursor-not-allowed bg-slate-700 text-slate-400"
+                    }`}
+                  >
+                    Get Quote on WhatsApp
+                  </a>
+                  <Link
+                    href="/dashboard/boq"
+                    className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-950 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:bg-slate-800"
+                  >
+                    Generate detailed BOQ
+                  </Link>
                 </div>
               </div>
 
-              <div className="mt-6 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">AI explanation</p>
-                <p className="mt-3 text-sm leading-6 text-slate-100">{explanation}</p>
+              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+                <p className="text-sm font-semibold text-white">Lead capture</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Save the lead, trigger the confirmation email, and route high-value estimates into the sales queue.
+                </p>
+
+                {leadError ? (
+                  <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    {leadError}
+                  </div>
+                ) : null}
+
+                {leadSuccess ? (
+                  <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                    {leadSuccess}
+                  </div>
+                ) : null}
+
+                <form className="mt-4 space-y-4" onSubmit={handleLeadSubmit}>
+                  <Field
+                    label="Name"
+                    type="text"
+                    value={leadForm.name}
+                    onChange={(value) => setLeadForm((current) => ({ ...current, name: value }))}
+                  />
+                  <Field
+                    label="Phone"
+                    type="tel"
+                    value={leadForm.phone}
+                    onChange={(value) => setLeadForm((current) => ({ ...current, phone: value }))}
+                  />
+                  <Field
+                    label="Email"
+                    type="email"
+                    value={leadForm.email}
+                    onChange={(value) => setLeadForm((current) => ({ ...current, email: value }))}
+                  />
+                  <Field
+                    label="Project details"
+                    type="textarea"
+                    value={leadForm.projectDetails}
+                    onChange={(value) => setLeadForm((current) => ({ ...current, projectDetails: value }))}
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={leadLoading || !result || !ruleBased}
+                    className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {leadLoading ? "Saving lead..." : "Save lead & open WhatsApp"}
+                  </button>
+                </form>
               </div>
 
               <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-                <p className="text-sm font-semibold text-white">Get detailed BOQ + quotation</p>
+                <p className="text-sm font-semibold text-white">BOQ auto-generate</p>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Convert this estimate into a detailed bill of quantities and a formal quotation for EPC execution.
+                  Suggested sections and auto-filled BOQ rows are prepared from the estimate below.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <Link
-                    href={accessStatus === "guest" ? "/admin/login?redirect=/tools/ai-estimator" : "/admin/dashboard"}
-                    className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-                  >
-                    Get detailed BOQ + quotation
-                  </Link>
+
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Suggested sections</p>
+                    <p className="mt-2 text-sm text-slate-100">
+                      Primary structure, secondary members, roof cladding, wall cladding, purlins, bracings
+                    </p>
+                  </div>
+
+                  {boqRows.map((row) => (
+                    <div
+                      key={row.section}
+                      className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="font-medium text-slate-100">{row.section}</span>
+                        <span className="text-slate-300">{row.unit}</span>
+                      </div>
+                      <div className="mt-2 grid gap-1 text-slate-300 sm:grid-cols-2">
+                        <span>Weight: {formatNumber(row.weightKg, 0)} kg</span>
+                        <span>Cost: {formatCurrency(row.costInr)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
                   <Link
                     href="/tools/ms-weight"
                     className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-950 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:bg-slate-800"
                   >
-                    Try MS weight calculator
+                    MS weight calculator
                   </Link>
                 </div>
+
+                {boqPayload ? (
+                  <p className="mt-4 text-xs text-slate-400">
+                    BOQ payload prepared with {boqPayload.items.length} rows and {formatCurrency(boqPayload.totalCost)} total.
+                  </p>
+                ) : null}
               </div>
             </aside>
+          </div>
+
+          <div className="border-t border-slate-800 px-6 py-6 sm:px-8">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <StatCard
+                label="Total steel"
+                value={`${formatNumber(totalSteelMt, 3)} MT`}
+                detail={`${formatNumber(totalSteelKg, 0)} kg total estimated steel`}
+              />
+              <StatCard
+                label="Cost range"
+                value={`${formatCurrency(totalCostMin)} - ${formatCurrency(totalCostMax)}`}
+                detail="Fabrication + erection cost at ₹150/kg"
+              />
+              <StatCard
+                label="AI distribution"
+                value={`${breakdown.primaryPercent}% / ${breakdown.secondaryPercent}% / ${breakdown.claddingPercent}%`}
+                detail="Primary / Secondary / Cladding"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -388,23 +769,34 @@ function Field({
   type: string;
   step?: string;
 }) {
+  const isTextarea = type === "textarea";
+
   return (
     <div>
       <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
         {label}
       </label>
-      <input
-        type={type}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500"
-      />
+      {isTextarea ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          rows={4}
+          className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500"
+        />
+      ) : (
+        <input
+          type={type}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500"
+        />
+      )}
     </div>
   );
 }
 
-function ResultCard({
+function MetricCard({
   label,
   value,
   note,
@@ -422,17 +814,20 @@ function ResultCard({
   );
 }
 
-function ResultLine({
+function StatCard({
   label,
   value,
+  detail,
 }: {
   label: string;
   value: string;
+  detail: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
-      <span className="text-sm text-slate-300">{label}</span>
-      <span className="text-right text-sm font-semibold text-white">{value}</span>
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</p>
+      <p className="mt-2 text-xl font-semibold text-white">{value}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{detail}</p>
     </div>
   );
 }

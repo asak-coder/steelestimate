@@ -33,7 +33,8 @@ const getNormalizedLocationKey = (location) => {
 const calculateLeadScore = (input = {}) => {
   const length = Number(input.length || 0);
   const width = Number(input.width || 0);
-  const area = roundToTwo(length * width);
+  const explicitArea = Number(input.area || 0);
+  const area = roundToTwo(explicitArea > 0 ? explicitArea : length * width);
   const crane = input.crane === true;
   const craneCapacity = Number(input.craneCapacity || 0);
   const locationKey = getNormalizedLocationKey(input.location);

@@ -46,6 +46,7 @@ type WeightEngineInput = {
   diameter?: number;
   outerDiameter?: number;
   innerDiameter?: number;
+  weightPerMeter?: number;
 };
 
 function createId() {
@@ -139,6 +140,13 @@ export function toWeightEngineInput(row: Pick<BoqRowDraft, 'type' | 'section' | 
   const thickness = getDimensionNumber(dimensions, ['thickness', 'thicknessMm', 'thk', 't']);
   const diameter = getDimensionNumber(dimensions, ['diameter', 'dia', 'diameterMm', 'outerDiameter', 'outerDiameterMm', 'od']);
   const innerDiameter = getDimensionNumber(dimensions, ['innerDiameter', 'innerDiameterMm', 'id']);
+  const weightPerMeter = getDimensionNumber(dimensions, [
+    'weightPerMeter',
+    'weightPerM',
+    'wpm',
+    'wtPerMeter',
+    'weight',
+  ]);
   const quantity = Math.max(1, Math.floor(toNumber(row.quantity, 1)));
 
   return {
@@ -152,6 +160,7 @@ export function toWeightEngineInput(row: Pick<BoqRowDraft, 'type' | 'section' | 
     diameter,
     outerDiameter: diameter,
     innerDiameter,
+    weightPerMeter,
   };
 }
 

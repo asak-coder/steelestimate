@@ -1,218 +1,188 @@
 "use client";
 
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-import {
-  buildBoqSavePayload,
-  calculateBoqRowComputed,
-  createEmptyBoqRow,
-  normalizeBoqRow,
-  type BoqMaterialType,
-  type BoqRowDraft,
-} from '../../../lib/boq';
-import { exportBoqProject, getBoqProject, saveBoqProject } from '../../../lib/api';
+import { useEffect, useMemo, useState } from "react";
+import { request, saveBoqProject } from "../../../lib/api";
+import { calculateBoqRowCost } from "../../../lib/costEngine";
+import { buildBoqSavePayload, calculateBoqRowComputed, type BoqRowDraft } from "../../../lib/boq";
 
-declare global {
-  interface Window {
-    __STEEL_ESTIMATE_USER__?: Record<string, unknown> | null;
-  }
-}
-
-type SectionOptionsMap = Record<BoqMaterialType, string[]>;
-
-const FALLBACK_SECTION_OPTIONS: SectionOptionsMap = {
-  IS: ['ISMB 100', 'ISMB 125', 'ISMB 150', 'ISMB 200', 'ISMB 250', 'ISMB 300'],
-  PLATE: ['PLATE 6 mm', 'PLATE 8 mm', 'PLATE 10 mm', 'PLATE 12 mm', 'PLATE 16 mm', 'PLATE 20 mm'],
-  PIPE: ['PIPE 15 NB', 'PIPE 20 NB', 'PIPE 25 NB', 'PIPE 40 NB', 'PIPE 50 NB', 'PIPE 80 NB'],
+type SectionOption = {
+  label: string;
+  weightPerMeter: number;
+  sourceType: string;
 };
 
-const MATERIAL_LABELS: Record<BoqMaterialType, string> = {
-  IS: 'IS',
-  PLATE: 'PLATE',
-  PIPE: 'PIPE',
+type RowForm = {
+  id: string;
+  section: string;
+  length: string;
+  quantity: string;
+  weightPerMeter: string;
 };
 
-function createDefaultDimensions(type: BoqMaterialType): Record<string, number> {
-  if (type === 'PLATE') {
-    return { length: 0, width: 0, thickness: 0 };
+type ComputedRow = RowForm & {
+  calculated: ReturnType<typeof calculateBoqRowComputed>;
+};
+
+const SECTION_LIST_ID = "boq-section-options";
+
+function createId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
   }
 
-  if (type === 'PIPE') {
-    return { length: 0, outerDiameter: 0, thickness: 0 };
-  }
-
-  return { length: 0 };
+  return `boq-row-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function normalizeSectionMap(data: unknown): SectionOptionsMap {
-  if (!data || typeof data !== 'object') {
-    return FALLBACK_SECTION_OPTIONS;
-  }
-
-  const fallback = { ...FALLBACK_SECTION_OPTIONS };
-  const source = data as Record<string, unknown>;
-
-  const pickList = (value: unknown, type: BoqMaterialType) => {
-    if (Array.isArray(value)) {
-      return value.map((item) => String(item).trim()).filter(Boolean);
-    }
-
-    if (value && typeof value === 'object') {
-      const nested = value as Record<string, unknown>;
-      const candidates = [nested.items, nested.sections, nested.data];
-      for (const candidate of candidates) {
-        if (Array.isArray(candidate)) {
-          return candidate.map((item) => String(item).trim()).filter(Boolean);
-        }
-      }
-    }
-
-    return fallback[type];
-  };
-
+function createRow(): RowForm {
   return {
-    IS: pickList(source.IS ?? source.is, 'IS'),
-    PLATE: pickList(source.PLATE ?? source.plate, 'PLATE'),
-    PIPE: pickList(source.PIPE ?? source.pipe, 'PIPE'),
+    id: createId(),
+    section: "",
+    length: "0",
+    quantity: "1",
+    weightPerMeter: "0",
   };
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function formatNumber(value: number, digits = 2) {
-  return Number.isFinite(value) ? value.toFixed(digits) : '0.00';
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Number.isFinite(value) ? value : 0);
 }
 
-function toNumber(value: string | number) {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function formatMt(value: number) {
+  return formatNumber(value / 1000, 3);
 }
 
-function normalizePlanKey(value: unknown) {
-  if (!value) return 'free';
-  const normalized = String(value).trim().toLowerCase();
-  if (normalized.includes('premium')) return 'premium';
-  if (normalized.includes('pro')) return 'pro';
-  if (normalized.includes('basic')) return 'basic';
-  if (normalized.includes('free')) return 'free';
-  return 'free';
-}
-
-function extractPlanFromUser(user: unknown) {
-  if (!user || typeof user !== 'object') return 'free';
-
-  const candidate = user as Record<string, unknown>;
-  const subscription =
-    candidate.subscription && typeof candidate.subscription === 'object'
-      ? (candidate.subscription as Record<string, unknown>)
-      : null;
-
-  const values = [
-    candidate.planType,
-    candidate.plan,
-    subscription?.plan,
-    subscription?.planType,
-    subscription?.premium ? 'premium' : null,
-  ];
-
-  for (const value of values) {
-    const plan = normalizePlanKey(value);
-    if (plan !== 'free') return plan;
-  }
-
-  return 'free';
-}
-
-function readCachedUser() {
-  if (typeof window === 'undefined') return null;
-
-  const preferredKeys = [
-    'steelestimate-user',
-    'steelestimate_user',
-    'steelestimate-auth-user',
-    'authUser',
-    'currentUser',
-    'user',
-  ];
-
-  for (const key of preferredKeys) {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) continue;
-
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        return parsed;
-      }
-    } catch (_) {
-      // ignore malformed cache entries
-    }
-  }
-
-  return window.__STEEL_ESTIMATE_USER__ && typeof window.__STEEL_ESTIMATE_USER__ === 'object'
-    ? window.__STEEL_ESTIMATE_USER__
-    : null;
-}
-
-function isPaidPlan(planKey: string) {
-  return normalizePlanKey(planKey) !== 'free';
-}
-
-function sanitizeFilenamePart(value: string) {
-  return String(value || '')
+function normalizeText(value: string) {
+  return String(value || "")
     .trim()
-    .replace(/[^\w\-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .toLowerCase();
 }
 
-function buildExportFilename(projectName: string, format: 'pdf' | 'excel') {
-  const safeName = sanitizeFilenamePart(projectName || 'boq-export');
-  return `${safeName || 'boq-export'}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+function resolveSectionOption(input: string, options: SectionOption[]) {
+  const normalized = normalizeText(input);
+  if (!normalized) return null;
+
+  const exact = options.find((option) => normalizeText(option.label) === normalized);
+  if (exact) return exact;
+
+  const fuzzyMatches = options.filter((option) => {
+    const label = normalizeText(option.label);
+    return label.includes(normalized) || normalized.includes(label);
+  });
+
+  return fuzzyMatches.length === 1 ? fuzzyMatches[0] : null;
 }
 
-function getExportMessage(planKey: string) {
-  if (isPaidPlan(planKey)) {
-    return 'BOQ export is unlocked on your current plan.';
+function collectSectionOptions(value: unknown, sink: SectionOption[], fallbackType = "") {
+  if (!value) return;
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSectionOptions(item, sink, fallbackType));
+    return;
   }
 
-  return 'BOQ export is available on paid plans only. Upgrade to download PDF or Excel files.';
+  if (typeof value !== "object") {
+    return;
+  }
+
+  const source = value as Record<string, unknown>;
+
+  if (Array.isArray(source.data)) {
+    collectSectionOptions(source.data, sink, fallbackType);
+    return;
+  }
+
+  if (Array.isArray(source.items)) {
+    collectSectionOptions(source.items, sink, fallbackType);
+    return;
+  }
+
+  if (Array.isArray(source.sections)) {
+    collectSectionOptions(source.sections, sink, fallbackType);
+    return;
+  }
+
+  if (Array.isArray(source.results)) {
+    collectSectionOptions(source.results, sink, fallbackType);
+    return;
+  }
+
+  const label = String(
+    source.designation ??
+      source.name ??
+      source.size ??
+      source.section ??
+      source.label ??
+      source.title ??
+      "",
+  ).trim();
+
+  const weightPerMeter = toNumber(
+    source.weightPerMeter ?? source.weight_per_meter ?? source.weight ?? source.mass ?? source.wpm ?? source.weightKg,
+    0,
+  );
+
+  if (label) {
+    sink.push({
+      label,
+      weightPerMeter,
+      sourceType: String(source.type ?? source.materialType ?? fallbackType ?? "").trim(),
+    });
+    return;
+  }
+
+  Object.entries(source).forEach(([key, nested]) => {
+    if (key === "meta" || key === "pagination") return;
+    collectSectionOptions(nested, sink, key);
+  });
+}
+
+function toDraft(row: RowForm): BoqRowDraft {
+  const section = String(row.section || "").trim();
+  const length = Math.max(0, toNumber(row.length, 0));
+  const quantity = Math.max(1, Math.floor(toNumber(row.quantity, 1)));
+  const weightPerMeter = Math.max(0, toNumber(row.weightPerMeter, 0));
+
+  return {
+    id: row.id,
+    type: "IS",
+    section,
+    dimensions: {
+      length,
+      quantity,
+      weightPerMeter,
+    },
+    quantity,
+    weight: 0,
+    cost: 0,
+  };
+}
+
+function createRowFromSection(option: SectionOption): RowForm {
+  return {
+    id: createId(),
+    section: option.label,
+    length: "0",
+    quantity: "1",
+    weightPerMeter: String(option.weightPerMeter || 0),
+  };
 }
 
 export default function BoqBuilderPage() {
-  const searchParams = useSearchParams();
-  const projectId = searchParams.get('projectId');
-
-  const [rows, setRows] = useState<BoqRowDraft[]>(() => [createEmptyBoqRow()]);
-  const [projectName, setProjectName] = useState('');
-  const [sectionOptions, setSectionOptions] = useState<SectionOptionsMap>(FALLBACK_SECTION_OPTIONS);
+  const [rows, setRows] = useState<RowForm[]>(() => [createRow()]);
+  const [sectionOptions, setSectionOptions] = useState<SectionOption[]>([]);
+  const [projectName, setProjectName] = useState("");
   const [loadingSections, setLoadingSections] = useState(true);
-  const [loadingProject, setLoadingProject] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | ''>('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [currentUser, setCurrentUser] = useState<Record<string, unknown> | null>(null);
-  const [savedProjectId, setSavedProjectId] = useState<string | null>(projectId);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const syncUser = () => {
-      const cachedUser = readCachedUser();
-      if (cachedUser) {
-        setCurrentUser(cachedUser as Record<string, unknown>);
-      }
-    };
-
-    syncUser();
-    window.addEventListener('steelestimate-auth-change', syncUser);
-    window.addEventListener('storage', syncUser);
-
-    return () => {
-      window.removeEventListener('steelestimate-auth-change', syncUser);
-      window.removeEventListener('storage', syncUser);
-    };
-  }, []);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -220,23 +190,17 @@ export default function BoqBuilderPage() {
     async function loadSections() {
       try {
         setLoadingSections(true);
-        const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
-        const endpoint = apiBase ? `${apiBase}/api/sections` : '/api/sections';
-        const response = await fetch(endpoint, {
-          credentials: 'include',
-        });
+        const response = await request("/api/sections", { method: "GET" });
+        const options: SectionOption[] = [];
+        collectSectionOptions(response?.data ?? response, options);
 
-        if (!response.ok) {
-          throw new Error('Unable to load section options');
-        }
-
-        const data = await response.json();
         if (mounted) {
-          setSectionOptions(normalizeSectionMap(data?.data ?? data));
+          setSectionOptions(options);
         }
-      } catch {
+      } catch (error) {
         if (mounted) {
-          setSectionOptions(FALLBACK_SECTION_OPTIONS);
+          setSectionOptions([]);
+          setErrorMessage(error instanceof Error ? error.message : "Failed to load steel sections");
         }
       } finally {
         if (mounted) {
@@ -252,493 +216,331 @@ export default function BoqBuilderPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!projectId) {
-      return;
-    }
+  const computedRows = useMemo<ComputedRow[]>(
+    () =>
+      rows.map((row) => {
+        const option = resolveSectionOption(row.section, sectionOptions);
+        const normalizedRow = option
+          ? {
+              ...row,
+              weightPerMeter: String(option.weightPerMeter ?? row.weightPerMeter ?? 0),
+            }
+          : row;
 
-    let mounted = true;
+        return {
+          ...normalizedRow,
+          calculated: calculateBoqRowComputed(toDraft(normalizedRow)),
+        };
+      }),
+    [rows, sectionOptions],
+  );
 
-    async function loadProject() {
-      try {
-        setLoadingProject(true);
-        setErrorMessage('');
-        const response = await getBoqProject(projectId);
-        const project = response?.data ?? response;
-        const items = Array.isArray(project?.items) ? project.items : [];
-        const nextRows = items.length
-          ? items.map((item: any) =>
-              calculateBoqRowComputed(
-                normalizeBoqRow({
-                  id: item?.id,
-                  type: item?.type,
-                  section: item?.section,
-                  dimensions: item?.dimensions,
-                  quantity: 1,
-                  weight: item?.weight,
-                  cost: item?.cost,
-                }),
-              ),
-            )
-          : [createEmptyBoqRow()];
+  const totalWeightKg = computedRows.reduce((sum, row) => sum + row.calculated.weight, 0);
+  const totalWeightMt = totalWeightKg / 1000;
+  const costTotals = calculateBoqRowCost(totalWeightKg);
 
-        if (mounted) {
-          setProjectName(project?.projectName ?? '');
-          setSavedProjectId(project?.id || project?._id || projectId || null);
-          setRows(nextRows);
-          setSuccessMessage('');
-        }
-      } catch (error) {
-        if (mounted) {
-          setErrorMessage(error instanceof Error ? error.message : 'Failed to load project');
-        }
-      } finally {
-        if (mounted) {
-          setLoadingProject(false);
-        }
-      }
-    }
+  function updateRow(rowId: string, updater: (row: RowForm) => RowForm) {
+    setRows((current) =>
+      current.map((row) => {
+        if (row.id !== rowId) return row;
 
-    loadProject();
+        const nextRow = updater(row);
+        const resolved = resolveSectionOption(nextRow.section, sectionOptions);
 
-    return () => {
-      mounted = false;
-    };
-  }, [projectId]);
-
-  const currentPlanKey = useMemo(() => extractPlanFromUser(currentUser), [currentUser]);
-  const canExportBoq = useMemo(() => isPaidPlan(currentPlanKey), [currentPlanKey]);
-
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, row) => {
-        const normalized = calculateBoqRowComputed(row);
-        acc.totalWeight += normalized.weight;
-        acc.totalCost += normalized.cost;
-        return acc;
-      },
-      { totalWeight: 0, totalCost: 0 },
-    );
-  }, [rows]);
-
-  function updateRow(rowId: string, updater: (row: BoqRowDraft) => BoqRowDraft) {
-    setRows((currentRows) =>
-      currentRows.map((row) => {
-        if (row.id !== rowId) {
-          return row;
-        }
-
-        return calculateBoqRowComputed(updater(row));
+        return {
+          ...nextRow,
+          weightPerMeter: resolved ? String(resolved.weightPerMeter ?? 0) : nextRow.weightPerMeter,
+        };
       }),
     );
   }
 
-  function handleTypeChange(rowId: string, type: BoqMaterialType) {
+  function handleSectionChange(rowId: string, value: string) {
     updateRow(rowId, (row) => {
-      const section = sectionOptions[type]?.[0] ?? '';
-      return normalizeBoqRow({
+      const resolved = resolveSectionOption(value, sectionOptions);
+
+      return {
         ...row,
-        type,
-        section,
-        dimensions: createDefaultDimensions(type),
-        quantity: 1,
-      });
+        section: value,
+        weightPerMeter: resolved ? String(resolved.weightPerMeter ?? 0) : "0",
+      };
     });
   }
 
-  function handleSectionChange(rowId: string, section: string) {
-    updateRow(rowId, (row) => normalizeBoqRow({ ...row, section }));
+  function handleLengthChange(rowId: string, value: string) {
+    updateRow(rowId, (row) => ({ ...row, length: value }));
   }
 
-  function handleQuantityChange(rowId: string, quantity: string) {
-    updateRow(rowId, (row) => normalizeBoqRow({ ...row, quantity: Math.max(1, Math.floor(toNumber(quantity) || 1)) }));
-  }
-
-  function handleDimensionChange(rowId: string, key: string, value: string) {
-    updateRow(rowId, (row) =>
-      normalizeBoqRow({
-        ...row,
-        dimensions: {
-          ...row.dimensions,
-          [key]: value,
-        },
-      }),
-    );
+  function handleQuantityChange(rowId: string, value: string) {
+    updateRow(rowId, (row) => ({
+      ...row,
+      quantity: String(Math.max(1, Math.floor(toNumber(value, 1)) || 1)),
+    }));
   }
 
   function addRow() {
-    setRows((currentRows) => [...currentRows, createEmptyBoqRow()]);
+    setRows((current) => [...current, createRow()]);
+  }
+
+  function addRowFromSuggestion(option: SectionOption) {
+    setRows((current) => [...current, createRowFromSection(option)]);
   }
 
   function removeRow(rowId: string) {
-    setRows((currentRows) => {
-      if (currentRows.length <= 1) {
-        return currentRows;
-      }
-
-      return currentRows.filter((row) => row.id !== rowId);
-    });
+    setRows((current) => (current.length > 1 ? current.filter((row) => row.id !== rowId) : current));
   }
 
   async function handleSave() {
     try {
       setSaving(true);
-      setErrorMessage('');
-      setSuccessMessage('');
+      setSaveMessage("");
+      setErrorMessage("");
 
-      const payload = buildBoqSavePayload(rows, projectName);
+      const payload = buildBoqSavePayload(rows.map(toDraft), projectName);
       const response = await saveBoqProject(payload);
-      const savedProject = response?.data ?? response;
+      const saved = response?.data ?? response;
 
-      if (savedProject?.items?.length) {
-        const nextRows = savedProject.items.map((item: any) =>
-          calculateBoqRowComputed(
-            normalizeBoqRow({
-              type: item?.type,
-              section: item?.section,
-              dimensions: item?.dimensions,
-              quantity: 1,
-              weight: item?.weight,
-              cost: item?.cost,
-            }),
-          ),
-        );
-        setRows(nextRows);
-      }
-
-      const nextSavedProjectId = savedProject?.id || savedProject?._id || savedProjectId || projectId || null;
-      setSavedProjectId(nextSavedProjectId);
-      setSuccessMessage('BOQ project saved successfully.');
+      setSaveMessage(
+        saved?.id
+          ? `Project saved successfully. Project ID: ${saved.id}`
+          : "Project saved successfully.",
+      );
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to save BOQ project');
+      setErrorMessage(error instanceof Error ? error.message : "Failed to save BOQ project");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleExport(format: 'pdf' | 'excel') {
-    if (!canExportBoq) {
-      setErrorMessage(getExportMessage(currentPlanKey));
-      setSuccessMessage('');
-      return;
-    }
-
-    if (!savedProjectId) {
-      setErrorMessage('Save the BOQ project before exporting.');
-      setSuccessMessage('');
-      return;
-    }
-
-    try {
-      setExportFormat(format);
-      setErrorMessage('');
-      setSuccessMessage('');
-
-      const blob = (await exportBoqProject({
-        projectId: savedProjectId,
-        format,
-      })) as Blob;
-
-      if (typeof window === 'undefined') {
-        throw new Error('Export is only available in the browser.');
-      }
-
-      const filename = buildExportFilename(projectName || 'boq-export', format);
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = downloadUrl;
-      anchor.download = filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-
-      setSuccessMessage(`${format.toUpperCase()} downloaded successfully.`);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : `Failed to download ${format.toUpperCase()}`);
-    } finally {
-      setExportFormat('');
-    }
-  }
-
-  const totalWeightMt = totals.totalWeight / 1000;
-  const exportStatusMessage = getExportMessage(currentPlanKey);
-
   return (
-    <section className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">BOQ Builder</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">Create and save steel estimate projects</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              Add multiple BOQ rows, calculate per-row weight and cost, then save the final estimate for later reuse.
-            </p>
-          </div>
+    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                BOQ Builder
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+                Multi-item steel quantity calculator
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                Add steel rows, search the section name, enter length and quantity, and the calculator
+                will total weight and cost automatically.
+              </p>
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/dashboard/projects"
-              className="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-            >
-              View saved projects
-            </Link>
             <button
               type="button"
               onClick={addRow}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800"
             >
-              Add row
+              + Add Row
             </button>
           </div>
-        </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="flex min-w-[260px] flex-1 flex-col gap-1 text-sm">
-            <span className="font-medium text-slate-700">Project name</span>
-            <input
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Optional project label"
-              className="rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
-            />
-          </label>
+          <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-slate-700">Project name</span>
+              <input
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                placeholder="Optional project label"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+              />
+            </label>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            {loadingSections ? 'Loading section options…' : 'Section options ready'}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 transition duration-200">
+              {loadingSections ? "Loading section master..." : `${sectionOptions.length} sections loaded`}
+            </div>
           </div>
 
-          {loadingProject ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              Loading saved project…
+          {saveMessage ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 transition duration-200">
+              {saveMessage}
+            </div>
+          ) : null}
+
+          {errorMessage ? (
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 transition duration-200">
+              {errorMessage}
             </div>
           ) : null}
         </div>
 
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {exportStatusMessage}
-        </div>
-
-        {successMessage ? (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {successMessage}
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+            <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Section search
+              </div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Length (m)
+              </div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Quantity
+              </div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Weight result
+              </div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Action
+              </div>
+            </div>
           </div>
-        ) : null}
 
-        {errorMessage ? (
-          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {errorMessage}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Section</th>
-              <th className="px-4 py-3">Dimensions</th>
-              <th className="px-4 py-3">Qty</th>
-              <th className="px-4 py-3">Weight (kg)</th>
-              <th className="px-4 py-3">Cost</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {rows.map((row) => {
-              const computed = calculateBoqRowComputed(row);
-              const options = sectionOptions[row.type] ?? [];
-              return (
-                <tr key={row.id} className="align-top">
-                  <td className="px-4 py-4">
-                    <select
-                      value={row.type}
-                      onChange={(event) => handleTypeChange(row.id, event.target.value as BoqMaterialType)}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-slate-500"
-                    >
-                      {Object.entries(MATERIAL_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-4">
-                    <select
+          <div className="divide-y divide-slate-200">
+            {computedRows.map((row, index) => (
+              <div
+                key={row.id}
+                className="px-6 py-5 transition duration-200 hover:bg-slate-50/80"
+              >
+                <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr_1fr_auto] lg:items-center">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium uppercase tracking-[0.2em] text-slate-500 lg:hidden">
+                      Section search
+                    </label>
+                    <input
                       value={row.section}
                       onChange={(event) => handleSectionChange(row.id, event.target.value)}
-                      className="w-full min-w-[180px] rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-slate-500"
-                    >
-                      <option value="">Select section</option>
-                      {options.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="grid min-w-[280px] gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs font-medium text-slate-500">Length (m)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={String(row.dimensions.length ?? '')}
-                          onChange={(event) => handleDimensionChange(row.id, 'length', event.target.value)}
-                          className="rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
-                        />
-                      </label>
-
-                      {row.type === 'PLATE' ? (
-                        <>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-500">Width (m)</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={String(row.dimensions.width ?? '')}
-                              onChange={(event) => handleDimensionChange(row.id, 'width', event.target.value)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-500">Thickness (mm)</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={String(row.dimensions.thickness ?? '')}
-                              onChange={(event) => handleDimensionChange(row.id, 'thickness', event.target.value)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
-                            />
-                          </label>
-                        </>
-                      ) : null}
-
-                      {row.type === 'PIPE' ? (
-                        <>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-500">Outer diameter (mm)</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={String(row.dimensions.outerDiameter ?? '')}
-                              onChange={(event) => handleDimensionChange(row.id, 'outerDiameter', event.target.value)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-500">Thickness (mm)</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={String(row.dimensions.thickness ?? '')}
-                              onChange={(event) => handleDimensionChange(row.id, 'thickness', event.target.value)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
-                            />
-                          </label>
-                        </>
-                      ) : null}
+                      list={SECTION_LIST_ID}
+                      placeholder="Search section..."
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition duration-200 focus:border-slate-500"
+                    />
+                    <div className="text-xs text-slate-500">
+                      {row.weightPerMeter !== "0"
+                        ? `${formatNumber(toNumber(row.weightPerMeter, 0))} kg/m`
+                        : "Pick a section to auto-fill weight per meter"}
                     </div>
-                  </td>
-                  <td className="px-4 py-4">
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-500 lg:hidden">
+                      Length (m)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.length}
+                      onChange={(event) => handleLengthChange(row.id, event.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition duration-200 focus:border-slate-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.2em] text-slate-500 lg:hidden">
+                      Quantity
+                    </label>
                     <input
                       type="number"
                       min="1"
                       step="1"
                       value={row.quantity}
                       onChange={(event) => handleQuantityChange(row.id, event.target.value)}
-                      className="w-24 rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition duration-200 focus:border-slate-500"
                     />
-                  </td>
-                  <td className="px-4 py-4 font-medium text-slate-900">{formatNumber(computed.weight)}</td>
-                  <td className="px-4 py-4 font-medium text-slate-900">₹ {formatNumber(computed.cost, 2)}</td>
-                  <td className="px-4 py-4">
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition duration-300">
+                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                      {index + 1}. row weight
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">
+                      {formatNumber(row.calculated.weight)} kg
+                    </div>
+                    <div className="text-sm text-slate-600">{formatMt(row.calculated.weight)} MT</div>
+                  </div>
+
+                  <div className="flex items-center justify-end">
                     <button
                       type="button"
                       onClick={() => removeRow(row.id)}
                       disabled={rows.length === 1}
-                      className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-rose-200 px-4 py-3 text-sm font-medium text-rose-600 transition duration-200 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Remove
+                      Remove Row
                     </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-      <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-[1.5fr_1fr]">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Totals</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Total weight</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(totals.totalWeight)} kg</p>
-              <p className="mt-1 text-sm text-slate-600">{formatNumber(totalWeightMt, 3)} MT</p>
+        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="grid gap-6 lg:grid-cols-[1.35fr_0.95fr] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Total summary</p>
+              <div className="mt-3 rounded-3xl bg-slate-900 px-5 py-5 text-white shadow-lg transition duration-300">
+                <p className="text-xs uppercase tracking-[0.26em] text-slate-300">TOTAL</p>
+                <p className="mt-2 text-3xl font-semibold">
+                  {formatNumber(totalWeightKg)} kg / {formatMt(totalWeightMt)} MT
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition duration-300">
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                    Fabrication cost
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    ₹ {formatNumber(costTotals.fabricationCost)}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition duration-300">
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                    Erection cost
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    ₹ {formatNumber(costTotals.erectionCost)}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 transition duration-300">
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-700">
+                    Total cost
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-emerald-900">
+                    ₹ {formatNumber(costTotals.totalCost)}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Total cost</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">₹ {formatNumber(totals.totalCost, 2)}</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Rows</p>
-              <p className="mt-2 text-2xl font-semibold text-slate-900">{rows.length}</p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-5 py-4 text-sm font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save Project"}
+              </button>
+
+              <button
+                type="button"
+                onClick={addRow}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-4 text-sm font-medium text-slate-700 transition duration-200 hover:bg-slate-50"
+              >
+                + Add Another Row
+              </button>
+
+              <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                The BOQ calculator auto-updates row weights and project totals as soon as the section,
+                length, or quantity changes.
+              </p>
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-col justify-between gap-3">
-          <p className="text-sm text-slate-600">
-            Save the current BOQ to the database or reload an existing project to continue editing.
-          </p>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => handleExport('pdf')}
-              disabled={saving || exportFormat === 'pdf' || !canExportBoq}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {exportFormat === 'pdf' ? 'Preparing PDF…' : 'Download PDF'}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleExport('excel')}
-              disabled={saving || exportFormat === 'excel' || !canExportBoq}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {exportFormat === 'excel' ? 'Preparing Excel…' : 'Download Excel'}
-            </button>
-          </div>
-
-          {!canExportBoq ? (
-            <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-            >
-              Upgrade to export BOQ
-            </Link>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? 'Saving…' : 'Save BOQ project'}
-          </button>
-        </div>
+        </section>
       </div>
-    </section>
+
+      <datalist id={SECTION_LIST_ID}>
+        {sectionOptions.map((option) => (
+          <option key={`${option.sourceType}-${option.label}`} value={option.label} />
+        ))}
+      </datalist>
+    </main>
   );
 }
