@@ -3,6 +3,7 @@ const User = require('../models/User');
 const AppError = require('../utils/appError');
 const { calculateLeadScore } = require('../services/leadScoringService');
 const { sendEmail, sendInternalNotificationEmail, isValidEmail } = require('../services/emailService');
+const { incrementUsage, getUtcDayKey } = require('../middleware/usageLimiter');
 
 const allowedStatuses = ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'];
 const legacyStatusMap = {
@@ -405,6 +406,40 @@ const getLeads = async (req, res, next) => {
       success: true,
       count: leads.length,
       data: leads.map(sanitizeLead)
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const trackCalculatorUsage = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || req.user?._id || null;
+    const action = normalizeString(req.body?.action || req.body?.event || 'estimate_view') || 'estimate_view';
+
+    if (!userId) {
+      return res.status(200).json({
+        success: true,
+        tracked: false,
+        message: 'Usage tracking skipped for anonymous sessions'
+      });
+    }
+
+    const usageDate = getUtcDayKey();
+    const metadata = {
+      ...(req.body?.metadata || {}),
+      source: normalizeString(req.body?.source || 'estimate_page') || 'estimate_page',
+      path: req.originalUrl || req.url,
+      method: req.method
+    };
+
+    await incrementUsage(userId, action, usageDate, metadata);
+
+    return res.status(200).json({
+      success: true,
+      tracked: true,
+      action,
+      usageDate
     });
   } catch (error) {
     return next(error);
@@ -862,6 +897,7 @@ const getAdminSubscriptions = async (req, res, next) => {
 };
 
 exports.getLeads = getLeads;
+exports.trackCalculatorUsage = trackCalculatorUsage;
 exports.createLead = createLead;
 exports.getLeadById = getLeadById;
 exports.updateLeadStatus = updateLeadStatus;

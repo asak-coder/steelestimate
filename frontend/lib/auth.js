@@ -5,6 +5,17 @@ function notifyAuthChange() {
   window.dispatchEvent(new Event(AUTH_EVENT));
 }
 
+function getLoginPath() {
+  if (typeof window === 'undefined') return '/login';
+
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname === 'admin.steelestimate.com') {
+    return '/admin/login';
+  }
+
+  return '/login';
+}
+
 function clearStoredToken() {
   if (typeof window === 'undefined') return;
   notifyAuthChange();
@@ -40,7 +51,7 @@ function logout() {
   }
   clearStoredToken();
   if (typeof window !== 'undefined') {
-    window.location.replace('/admin/login');
+    window.location.replace(getLoginPath());
   }
 }
 

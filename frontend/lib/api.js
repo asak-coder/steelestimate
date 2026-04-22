@@ -168,6 +168,14 @@ export async function updateProfile(payload) {
   });
 }
 
+export async function trackCalculatorUsage(payload = {}) {
+  return request('/api/leads/track-usage', {
+    method: 'POST',
+    body: payload,
+    redirectOnAuthError: false,
+  });
+}
+
 export async function getPlans() {
   const data = await request('/api/plans', {
     method: 'GET',
@@ -547,6 +555,7 @@ const api = {
   logout,
   getMe,
   updateProfile,
+  trackCalculatorUsage,
   getPlans,
   createSubscribeOrder,
   createOrder,

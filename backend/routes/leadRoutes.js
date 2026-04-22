@@ -7,6 +7,7 @@ const {
   getHistory,
   getAdminStats,
   getDashboard,
+  trackCalculatorUsage,
   createLead
 } = require("../controllers/leadController");
 
@@ -28,6 +29,7 @@ const requireRoles = (roles) => (req, res, next) => {
 };
 
 router.post("/", sensitiveLimiter, createLead);
+router.post("/track-usage", trackCalculatorUsage);
 
 router.get("/admin/stats", auth, requireRoles(["ADMIN"]), adminLimiter, getAdminStats);
 router.get("/dashboard", auth, sensitiveLimiter, getDashboard);
