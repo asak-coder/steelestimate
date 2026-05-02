@@ -1,9 +1,4 @@
-let rateLimit;
-try {
-  rateLimit = require('express-rate-limit');
-} catch (error) {
-  rateLimit = () => (req, res, next) => next();
-}
+const rateLimit = require('express-rate-limit');
 
 const baseOptions = {
   standardHeaders: true,
@@ -40,6 +35,16 @@ const loginLimiter = rateLimit({
   }
 });
 
+const twoFactorLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Too many two-factor attempts, please try again later'
+  }
+});
+
 const adminLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000,
@@ -73,6 +78,7 @@ const pebCalcLimiter = rateLimit({
 module.exports = {
   globalLimiter,
   loginLimiter,
+  twoFactorLimiter,
   authLimiter,
   adminLimiter,
   sensitiveLimiter,

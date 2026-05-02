@@ -1,97 +1,160 @@
-const RECENT_WINDOW_MS = 60 * 60 * 1000;
+const LoginLog = require('../models/LoginLog');
+const AuthSession = require('../models/AuthSession');
+const SecurityEvent = require('../models/SecurityEvent');
 
-const compactSession = (session) => ({
-  token: session.token,
-  createdAt: session.createdAt,
-  userAgent: session.userAgent,
-  ip: session.ip,
-  lastUsed: session.lastUsed
-});
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const NO_DEDUPE_EVENT_TYPES = new Set(['TOKEN_REUSE_DETECTED', 'SESSION_REVOKED', '2FA_DISABLED']);
 
-const compactLoginLog = (log) => ({
-  ip: log.ip,
-  userAgent: log.userAgent,
-  status: log.status,
-  timestamp: log.timestamp
-});
-
-const detectSecurityEvents = (user) => {
-  const events = [];
-  const logs = [...(user.loginLogs || [])].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
-  const sessions = user.sessions || [];
-  const now = Date.now();
-  const recentFailed = logs.filter(
-    (log) => log.status === 'FAILED' && now - new Date(log.timestamp).getTime() <= RECENT_WINDOW_MS
-  );
-
-  if (recentFailed.length >= 3) {
-    events.push({
-      type: 'MULTIPLE_FAILED_LOGINS',
-      severity: recentFailed.length >= 5 ? 'HIGH' : 'MEDIUM',
-      message: `${recentFailed.length} failed login attempts in the last hour`,
-      count: recentFailed.length,
-      firstSeen: recentFailed[0]?.timestamp,
-      lastSeen: recentFailed[recentFailed.length - 1]?.timestamp,
-      metadata: {
-        ips: [...new Set(recentFailed.map((item) => item.ip).filter(Boolean))]
-      }
+const createSecurityEvent = async ({ userId, type, severity, ip, userAgent, message, metadata = {} }) => {
+  if (NO_DEDUPE_EVENT_TYPES.has(type)) {
+    return SecurityEvent.create({
+      userId,
+      type,
+      severity,
+      ip: ip || '',
+      userAgent: userAgent || '',
+      message,
+      metadata
     });
   }
 
-  const recentSuccess = logs.filter(
-    (log) => log.status === 'SUCCESS' && now - new Date(log.timestamp).getTime() <= RECENT_WINDOW_MS
-  );
-  const successIps = [...new Set(recentSuccess.map((item) => item.ip).filter(Boolean))];
-  if (successIps.length > 1) {
-    events.push({
+  const since = new Date(Date.now() - ONE_HOUR_MS);
+  const existing = await SecurityEvent.findOne({
+    userId,
+    type,
+    ip: ip || '',
+    createdAt: { $gte: since }
+  }).select('_id');
+
+  if (existing) {
+    return existing;
+  }
+
+  return SecurityEvent.create({
+    userId,
+    type,
+    severity,
+    ip: ip || '',
+    userAgent: userAgent || '',
+    message,
+    metadata
+  });
+};
+
+const recordLoginLog = (payload) =>
+  LoginLog.create({
+    userId: payload.userId || null,
+    email: payload.email || '',
+    ip: payload.ip || '',
+    userAgent: payload.userAgent || '',
+    status: payload.status,
+    reason: payload.reason || null
+  });
+
+const detectFailedLoginBurst = async ({ userId, email, ip, userAgent }) => {
+  const since = new Date(Date.now() - FIFTEEN_MINUTES_MS);
+  const failedCount = await LoginLog.countDocuments({
+    email,
+    status: 'FAILED',
+    createdAt: { $gte: since }
+  });
+
+  if (failedCount >= 5) {
+    await createSecurityEvent({
+      userId,
+      type: 'MULTIPLE_FAILED_LOGINS',
+      severity: 'CRITICAL',
+      ip,
+      userAgent,
+      message: `${failedCount} failed login attempts within 15 minutes`,
+      metadata: {
+        email,
+        failedCount,
+        windowMinutes: 15
+      }
+    });
+  }
+};
+
+const detectSuccessfulLoginAnomalies = async ({ userId, ip, userAgent, deviceHash }) => {
+  const now = Date.now();
+  const oneHourAgo = new Date(now - ONE_HOUR_MS);
+  const [previousSessionCount, previousSuccessCount] = await Promise.all([
+    AuthSession.countDocuments({ userId }),
+    LoginLog.countDocuments({ userId, status: 'SUCCESS' })
+  ]);
+
+  if (previousSessionCount === 0 && previousSuccessCount === 0) {
+    return;
+  }
+
+  const previousIpSession = await AuthSession.findOne({
+    userId,
+    ip,
+    revokedAt: null
+  }).select('_id');
+
+  if (!previousIpSession) {
+    await createSecurityEvent({
+      userId,
+      type: 'NEW_IP_LOGIN',
+      severity: 'LOW',
+      ip,
+      userAgent,
+      message: 'Successful login from a new IP address',
+      metadata: { ip }
+    });
+  }
+
+  const recentIps = await LoginLog.distinct('ip', {
+    userId,
+    status: 'SUCCESS',
+    createdAt: { $gte: oneHourAgo }
+  });
+
+  const uniqueRecentIps = [...new Set(recentIps.filter(Boolean))];
+  if (ip && !uniqueRecentIps.includes(ip)) {
+    uniqueRecentIps.push(ip);
+  }
+
+  if (uniqueRecentIps.length > 1) {
+    await createSecurityEvent({
+      userId,
       type: 'RAPID_IP_CHANGE',
       severity: 'HIGH',
-      message: 'Successful logins from multiple IP addresses in a short window',
-      count: successIps.length,
-      firstSeen: recentSuccess[0]?.timestamp,
-      lastSeen: recentSuccess[recentSuccess.length - 1]?.timestamp,
+      ip,
+      userAgent,
+      message: 'Successful logins from multiple IP addresses within one hour',
       metadata: {
-        ips: successIps
+        ips: uniqueRecentIps,
+        windowMinutes: 60
       }
     });
   }
 
-  const activeUserAgents = [...new Set(sessions.map((item) => item.userAgent).filter(Boolean))];
-  if (activeUserAgents.length > 3) {
-    events.push({
-      type: 'UNUSUAL_USER_AGENT_CHANGES',
+  const previousDevice = await AuthSession.findOne({
+    userId,
+    deviceHash,
+    revokedAt: null
+  }).select('_id');
+
+  if (!previousDevice) {
+    await createSecurityEvent({
+      userId,
+      type: 'UNUSUAL_USER_AGENT',
       severity: 'MEDIUM',
-      message: 'Active sessions span several browser or device signatures',
-      count: activeUserAgents.length,
-      firstSeen: sessions[0]?.createdAt,
-      lastSeen: sessions[sessions.length - 1]?.lastUsed,
-      metadata: {
-        userAgents: activeUserAgents.slice(0, 10)
-      }
+      ip,
+      userAgent,
+      message: 'Successful login from a new browser or device signature',
+      metadata: { deviceHash }
     });
   }
-
-  if (user.security?.lockUntil && new Date(user.security.lockUntil).getTime() > now) {
-    events.push({
-      type: 'ACCOUNT_LOCKED',
-      severity: 'HIGH',
-      message: 'Account is temporarily locked after failed authentication attempts',
-      count: user.security.failedAttempts || 0,
-      firstSeen: null,
-      lastSeen: user.security.lockUntil,
-      metadata: {
-        lockUntil: user.security.lockUntil
-      }
-    });
-  }
-
-  return events;
 };
 
 module.exports = {
-  compactSession,
-  compactLoginLog,
-  detectSecurityEvents
+  createSecurityEvent,
+  recordLoginLog,
+  detectFailedLoginBurst,
+  detectSuccessfulLoginAnomalies
 };

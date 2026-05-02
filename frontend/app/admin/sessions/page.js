@@ -28,7 +28,7 @@ export default function AdminSessionsPage() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [revokingToken, setRevokingToken] = useState('');
+  const [revokingSessionId, setRevokingSessionId] = useState('');
 
   async function loadSessions() {
     setLoading(true);
@@ -46,16 +46,16 @@ export default function AdminSessionsPage() {
     loadSessions();
   }, []);
 
-  async function handleRevoke(token) {
-    setRevokingToken(token);
+  async function handleRevoke(refreshTokenId) {
+    setRevokingSessionId(refreshTokenId);
     setError('');
     try {
-      await revokeSession(token);
-      setSessions((items) => items.filter((item) => item.token !== token));
+      await revokeSession(refreshTokenId);
+      setSessions((items) => items.filter((item) => item.refreshTokenId !== refreshTokenId));
     } catch (err) {
       setError(err?.message || 'Unable to revoke session.');
     } finally {
-      setRevokingToken('');
+      setRevokingSessionId('');
     }
   }
 
@@ -86,7 +86,7 @@ export default function AdminSessionsPage() {
           ) : (
             <div className="divide-y divide-slate-200">
               {sessions.map((session) => (
-                <div key={session.token} className="grid gap-4 px-5 py-4 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-center">
+                <div key={session.refreshTokenId} className="grid gap-4 px-5 py-4 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-center">
                   <div>
                     <p className="font-medium text-slate-900">{deviceName(session.userAgent)}</p>
                     <p className="mt-1 break-all text-xs text-slate-500">{session.userAgent || 'No user agent captured'}</p>
@@ -97,15 +97,15 @@ export default function AdminSessionsPage() {
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">Last active</p>
-                    <p className="mt-1 text-sm text-slate-800">{formatDate(session.lastUsed)}</p>
+                    <p className="mt-1 text-sm text-slate-800">{formatDate(session.lastUsedAt)}</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleRevoke(session.token)}
-                    disabled={revokingToken === session.token}
+                    onClick={() => handleRevoke(session.refreshTokenId)}
+                    disabled={revokingSessionId === session.refreshTokenId}
                     className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {revokingToken === session.token ? 'Revoking...' : 'Revoke'}
+                    {revokingSessionId === session.refreshTokenId ? 'Revoking...' : 'Revoke'}
                   </button>
                 </div>
               ))}

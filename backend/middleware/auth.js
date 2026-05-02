@@ -1,5 +1,5 @@
 const { verifyAccessToken } = require('../services/jwtService');
-const AppError = require('../utils/appError');
+const User = require('../models/User');
 
 const sendAuthError = (res, message, statusCode = 401) =>
   res.status(statusCode).json({
@@ -7,7 +7,7 @@ const sendAuthError = (res, message, statusCode = 401) =>
     message
   });
 
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization || '';
     const [scheme, token] = authHeader.split(' ');
@@ -17,7 +17,20 @@ const verifyToken = (req, res, next) => {
     }
 
     const decoded = verifyAccessToken(token);
-    req.user = decoded;
+    const user = await User.findById(decoded.id).select('email role disabledAt twoFactorEnabled');
+
+    if (!user || user.disabledAt) {
+      return sendAuthError(res, 'Account is disabled or no longer exists', 401);
+    }
+
+    req.user = {
+      id: String(user._id),
+      email: user.email,
+      role: user.role,
+      twoFactorEnabled: Boolean(user.twoFactorEnabled),
+      tokenIssuedAt: decoded.iat,
+      tokenExpiresAt: decoded.exp
+    };
 
     return next();
   } catch (error) {

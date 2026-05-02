@@ -147,16 +147,27 @@ export async function getSessions() {
   return unwrapData(await request('/api/auth/sessions', { method: 'GET' }));
 }
 
-export async function revokeSession(token) {
-  return request(`/api/auth/sessions/${encodeURIComponent(token)}`, { method: 'DELETE' });
+export async function revokeSession(refreshTokenId) {
+  return request(`/api/auth/sessions/${encodeURIComponent(refreshTokenId)}`, { method: 'DELETE' });
 }
 
-export async function getLoginLogs() {
-  return unwrapData(await request('/api/auth/login-logs', { method: 'GET' }));
+const buildQuery = (params = {}) => {
+  const searchParams = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      searchParams.set(key, String(value));
+    }
+  });
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+};
+
+export async function getLoginLogs(params = {}) {
+  return unwrapData(await request(`/api/auth/login-logs${buildQuery(params)}`, { method: 'GET' }));
 }
 
-export async function getSecurityEvents() {
-  return unwrapData(await request('/api/auth/security-events', { method: 'GET' }));
+export async function getSecurityEvents(params = {}) {
+  return unwrapData(await request(`/api/auth/security-events${buildQuery(params)}`, { method: 'GET' }));
 }
 
 export async function setup2FA() {

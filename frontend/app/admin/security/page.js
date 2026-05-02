@@ -19,6 +19,12 @@ export default function AdminSecurityPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filters, setFilters] = useState({
+    from: '',
+    to: '',
+    severity: '',
+    ip: ''
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +33,13 @@ export default function AdminSecurityPage() {
       setLoading(true);
       setError('');
       try {
-        const [loginLogs, securityEvents] = await Promise.all([getLoginLogs(), getSecurityEvents()]);
+        const params = {
+          from: filters.from,
+          to: filters.to,
+          severity: filters.severity,
+          ip: filters.ip
+        };
+        const [loginLogs, securityEvents] = await Promise.all([getLoginLogs(params), getSecurityEvents(params)]);
         if (!cancelled) {
           setLogs(loginLogs);
           setEvents(securityEvents);
@@ -48,7 +60,7 @@ export default function AdminSecurityPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [filters]);
 
   const summary = useMemo(() => {
     const failed = logs.filter((log) => log.status === 'FAILED').length;
@@ -75,6 +87,53 @@ export default function AdminSecurityPage() {
             {error}
           </div>
         ) : null}
+
+        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-4">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">From</span>
+              <input
+                type="date"
+                value={filters.from}
+                onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">To</span>
+              <input
+                type="date"
+                value={filters.to}
+                onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Severity</span>
+              <select
+                value={filters.severity}
+                onChange={(event) => setFilters((current) => ({ ...current, severity: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+              >
+                <option value="">All</option>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">IP</span>
+              <input
+                type="text"
+                value={filters.ip}
+                onChange={(event) => setFilters((current) => ({ ...current, ip: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+                placeholder="203.0.113.10"
+              />
+            </label>
+          </div>
+        </section>
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
           {[

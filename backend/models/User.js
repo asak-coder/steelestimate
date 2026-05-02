@@ -27,65 +27,8 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: USER_ROLES,
-      default: 'admin'
-    },
-    refreshToken: {
-      type: String,
-      default: null,
-      select: false
-    },
-    sessions: {
-      type: [
-        {
-          token: {
-            type: String,
-            required: true,
-            select: false
-          },
-          createdAt: {
-            type: Date,
-            default: Date.now
-          },
-          userAgent: {
-            type: String,
-            default: ''
-          },
-          ip: {
-            type: String,
-            default: ''
-          },
-          lastUsed: {
-            type: Date,
-            default: Date.now
-          }
-        }
-      ],
-      default: [],
-      select: false
-    },
-    loginLogs: {
-      type: [
-        {
-          ip: {
-            type: String,
-            default: ''
-          },
-          userAgent: {
-            type: String,
-            default: ''
-          },
-          status: {
-            type: String,
-            enum: ['SUCCESS', 'FAILED'],
-            required: true
-          },
-          timestamp: {
-            type: Date,
-            default: Date.now
-          }
-        }
-      ],
-      default: []
+      default: 'admin',
+      index: true
     },
     security: {
       failedAttempts: {
@@ -94,6 +37,14 @@ const userSchema = new mongoose.Schema(
       },
       lockUntil: {
         type: Date,
+        default: null
+      },
+      lastLoginAt: {
+        type: Date,
+        default: null
+      },
+      lastLoginIp: {
+        type: String,
         default: null
       }
     },
@@ -105,6 +56,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
       select: false
+    },
+    passwordChangedAt: {
+      type: Date,
+      default: null
+    },
+    disabledAt: {
+      type: Date,
+      default: null,
+      index: true
     },
     planType: {
       type: String,
@@ -171,6 +131,9 @@ userSchema.pre('save', async function (next) {
   try {
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
+    if (!this.isNew) {
+      this.passwordChangedAt = new Date();
+    }
     return next();
   } catch (error) {
     return next(error);
@@ -192,6 +155,16 @@ userSchema.methods.toSafeObject = function () {
     updatedAt: this.updatedAt
   };
 };
+
+userSchema.index(
+  { 'security.lockUntil': 1 },
+  {
+    name: 'idx_users_security_lock_until',
+    partialFilterExpression: {
+      'security.lockUntil': { $type: 'date' }
+    }
+  }
+);
 
 userSchema.statics.ROLES = USER_ROLES;
 
