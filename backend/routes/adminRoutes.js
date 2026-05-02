@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
 const { adminLimiter } = require('../middleware/rateLimiters');
 const {
   getAdminStats,
@@ -10,9 +10,9 @@ const {
 
 const router = express.Router();
 
-router.get('/stats', requireAuth, requireAdmin, adminLimiter, getAdminStats);
-router.get('/users', requireAuth, requireAdmin, adminLimiter, getAdminUsers);
-router.get('/leads', requireAuth, requireAdmin, adminLimiter, getAdminLeads);
-router.get('/subscriptions', requireAuth, requireAdmin, adminLimiter, getAdminSubscriptions);
+router.get('/stats', verifyToken, requireAdmin, adminLimiter, getAdminStats);
+router.get('/users', verifyToken, requireAdmin, adminLimiter, getAdminUsers);
+router.get('/leads', verifyToken, requireAdmin, adminLimiter, getAdminLeads);
+router.get('/subscriptions', verifyToken, requireAdmin, adminLimiter, getAdminSubscriptions);
 
 module.exports = router;

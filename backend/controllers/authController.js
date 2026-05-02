@@ -1,77 +1,128 @@
-const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const AppError = require('../utils/appError');
+const {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken
+} = require('../services/jwtService');
 const { env } = require('../config/env');
 
-const cookieOptions = {
+const refreshCookieOptions = {
   httpOnly: true,
   secure: true,
-  sameSite: 'lax',
-  path: '/',
-  domain: '.steelestimate.com',
+  sameSite: 'strict',
+  path: '/'
 };
 
-const login = async (req, res) => {
+if (env.NODE_ENV === 'production') {
+  refreshCookieOptions.domain = '.steelestimate.com';
+}
+
+const sanitizeUser = (user) => ({
+  id: String(user._id || user.id),
+  name: user.name,
+  email: user.email,
+  role: user.role
+});
+
+const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
+      throw new AppError('Email and password are required', 400);
     }
 
-    // Existing credential validation and user lookup should remain in the project.
-    // This controller only ensures the session cookie is set correctly in production.
-    const user = req.user || { _id: null, email, role: 'user' };
+    const user = await User.findOne({ email }).select('+password +refreshToken');
 
-    const token = jwt.sign(
-      {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-      },
-      env.JWT_SECRET,
-      {
-        expiresIn: env.JWT_EXPIRES_IN || '7d',
-      }
-    );
+    if (!user) {
+      throw new AppError('Invalid credentials', 401);
+    }
 
-    res.cookie('authToken', token, cookieOptions);
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      throw new AppError('Invalid credentials', 401);
+    }
+
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+
     return res.status(200).json({
       success: true,
-      message: 'Login successful',
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-      },
+      data: {
+        accessToken,
+        user: sanitizeUser(user)
+      }
     });
   } catch (error) {
-    return res.status(500).json({ message: 'Login failed' });
+    return next(error);
   }
 };
 
-const me = async (req, res) => {
+const refreshToken = async (req, res, next) => {
   try {
-    const token = req.cookies.authToken;
+    const token = req.cookies?.refreshToken;
+
     if (!token) {
-      return res.status(401).json({ message: 'Unauthorized' });
+      throw new AppError('Refresh token is required', 401);
     }
 
-    const decodedUser = jwt.verify(token, env.JWT_SECRET);
-    return res.json({
+    const decoded = verifyRefreshToken(token);
+    const user = await User.findById(decoded.id).select('+refreshToken');
+
+    if (!user || !user.refreshToken || user.refreshToken !== token) {
+      throw new AppError('Invalid refresh token', 401);
+    }
+
+    const accessToken = signAccessToken(user);
+
+    return res.status(200).json({
       success: true,
-      user: decodedUser,
+      data: {
+        accessToken
+      }
     });
   } catch (error) {
-    return res.status(401).json({ message: 'Session expired or invalid' });
+    return next(error);
   }
 };
 
-const logout = async (req, res) => {
-  res.clearCookie('authToken', cookieOptions);
-  return res.status(200).json({ message: 'Logged out' });
+const logout = async (req, res, next) => {
+  try {
+    const token = req.cookies?.refreshToken;
+
+    if (token) {
+      try {
+        const decoded = verifyRefreshToken(token);
+        const user = await User.findById(decoded.id).select('+refreshToken');
+        if (user && user.refreshToken === token) {
+          user.refreshToken = null;
+          await user.save();
+        }
+      } catch (error) {
+        // ignore invalid token and still clear cookie
+      }
+    }
+
+    res.clearCookie('refreshToken', refreshCookieOptions);
+
+    return res.status(200).json({
+      success: true,
+      data: null
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 module.exports = {
   login,
-  me,
-  logout,
+  refreshToken,
+  logout
 };

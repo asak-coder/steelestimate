@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
-const { env } = require('./config/env');
+const { env, validateEnv } = require('./config/env');
 const securityMiddleware = require('./middleware/security');
 const authRoutes = require('./routes/authRoutes');
 const v1AuthRoutes = require('./routes/v1/authRoutes');
@@ -15,12 +15,14 @@ const estimateRoutes = require('./routes/v1/estimateRoutes');
 const aiEstimateRoutes = require('./routes/v1/aiEstimateRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
+validateEnv();
+
 const app = express();
 
 app.use(
   cors({
-    origin: 'https://steelestimate.com',
-    credentials: true,
+    origin: env.CLIENT_URL,
+    credentials: true
   })
 );
 app.use(cookieParser());
@@ -28,7 +30,7 @@ app.use(
   express.json({
     verify: (req, res, buf) => {
       req.rawBody = Buffer.from(buf);
-    },
+    }
   })
 );
 app.use(express.urlencoded({ extended: true }));
@@ -56,11 +58,9 @@ app.use(errorHandler);
   try {
     const PORT = process.env.PORT || env.PORT || 5000;
 
-    if (process.env.MONGO_URI) {
-      await mongoose.connect(process.env.MONGO_URI);
+    if (env.MONGO_URI) {
+      await mongoose.connect(env.MONGO_URI);
       console.log('✅ MongoDB Connected');
-    } else {
-      console.warn('⚠️ MONGO_URI missing. Starting server without database connection.');
     }
 
     app.listen(PORT, '0.0.0.0', () => {

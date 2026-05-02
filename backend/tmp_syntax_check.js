@@ -1,0 +1,11 @@
+require('./config/env');
+require('./models/User');
+require('./services/jwtService');
+require('./middleware/auth');
+require('./controllers/authController');
+require('./routes/authRoutes');
+require('./routes/adminRoutes');
+require('./routes/boqRoutes');
+require('./routes/leadRoutes');
+require('./server');
+console.log('syntax-ok');

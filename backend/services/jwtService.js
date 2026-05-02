@@ -1,37 +1,46 @@
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
+const { env } = require('../config/env');
 
-const getJwtConfig = () => ({
-  secret: process.env.JWT_SECRET,
-  expiresIn: process.env.JWT_EXPIRES_IN || "8h",
-  issuer: process.env.JWT_ISSUER || "steelestimate-api",
-  audience: process.env.JWT_AUDIENCE || "steelestimate-admin"
+const issuer = 'steelestimate-api';
+const audience = 'steelestimate-admin';
+
+const accessTokenOptions = {
+  expiresIn: env.JWT_ACCESS_EXPIRES_IN,
+  issuer,
+  audience
+};
+
+const refreshTokenOptions = {
+  expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+  issuer,
+  audience
+};
+
+const buildPayload = (user) => ({
+  id: String(user._id || user.id),
+  email: user.email,
+  role: user.role
 });
 
-const signToken = (payload, options = {}) => {
-  const { secret, expiresIn, issuer, audience } = getJwtConfig();
-
-  return jwt.sign(payload, secret, {
-    expiresIn,
-    issuer,
-    audience,
-    ...options
+const signAccessToken = (user) =>
+  jwt.sign(buildPayload(user), env.JWT_SECRET, {
+    ...accessTokenOptions,
+    subject: String(user._id || user.id)
   });
-};
 
-const signAdminToken = (payload) => signToken(payload, { subject: payload.id });
-const signUserToken = (payload) => signToken(payload, { subject: payload.id });
-
-const verifyToken = (token) => {
-  const { secret, issuer, audience } = getJwtConfig();
-
-  return jwt.verify(token, secret, {
-    issuer,
-    audience
+const signRefreshToken = (user) =>
+  jwt.sign(buildPayload(user), env.JWT_REFRESH_SECRET, {
+    ...refreshTokenOptions,
+    subject: String(user._id || user.id)
   });
-};
+
+const verifyAccessToken = (token) => jwt.verify(token, env.JWT_SECRET, accessTokenOptions);
+
+const verifyRefreshToken = (token) => jwt.verify(token, env.JWT_REFRESH_SECRET, refreshTokenOptions);
 
 module.exports = {
-  signAdminToken,
-  signUserToken,
-  verifyToken
+  signAccessToken,
+  signRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken
 };

@@ -1,44 +1,43 @@
-const jwt = require('jsonwebtoken');
-const { env } = require('../config/env');
+const { verifyAccessToken } = require('../services/jwtService');
+const AppError = require('../utils/appError');
 
-function requireAuth(req, res, next) {
+const sendAuthError = (res, message, statusCode = 401) =>
+  res.status(statusCode).json({
+    success: false,
+    message
+  });
+
+const verifyToken = (req, res, next) => {
   try {
-    const token = req.cookies && req.cookies.authToken;
+    const authHeader = req.headers.authorization || '';
+    const [scheme, token] = authHeader.split(' ');
 
-    if (!token) {
-      return res.status(401).json({ message: 'Authentication required' });
+    if (!scheme || scheme.toLowerCase() !== 'bearer' || !token) {
+      return sendAuthError(res, 'Authorization token is required', 401);
     }
 
-    const decoded = jwt.verify(token, env.JWT_SECRET);
+    const decoded = verifyAccessToken(token);
     req.user = decoded;
+
     return next();
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid or expired session' });
+    return sendAuthError(res, 'Invalid or expired token', 401);
   }
-}
+};
 
-function requireAdmin(req, res, next) {
+const requireAdmin = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({ message: 'Authentication required' });
+    return sendAuthError(res, 'Authentication required', 401);
   }
 
-  const role = String(req.user.role || req.user.userRole || '').toLowerCase();
-  const isAdmin =
-    role === 'admin' ||
-    role === 'superadmin' ||
-    req.user.isAdmin === true ||
-    req.user.admin === true ||
-    req.user.isAdmin === 'true';
-
-  if (!isAdmin) {
-    return res.status(403).json({ message: 'Admin access required' });
+  if (String(req.user.role || '').toLowerCase() !== 'admin') {
+    return sendAuthError(res, 'Admin access required', 403);
   }
 
   return next();
-}
+};
 
-module.exports = requireAuth;
-module.exports.requireAuth = requireAuth;
-module.exports.requireAdmin = requireAdmin;
-module.exports.authMiddleware = requireAuth;
-module.exports.protectRoute = requireAuth;
+module.exports = {
+  verifyToken,
+  requireAdmin
+};

@@ -1,87 +1,95 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const USER_ROLES = ['ADMIN', 'MANAGER', 'VIEWER'];
+const USER_ROLES = ['admin', 'manager', 'viewer'];
 
-const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  email: {
-    type: String,
-    required: true,
-    trim: true,
-    lowercase: true,
-    unique: true,
-    index: true
-  },
-  password: {
-    type: String,
-    required: true,
-    minlength: 8,
-    select: false
-  },
-  role: {
-    type: String,
-    enum: USER_ROLES,
-    default: 'VIEWER'
-  },
-  planType: {
-    type: String,
-    default: 'free',
-    index: true
-  },
-  planExpiry: {
-    type: Date,
-    default: null
-  },
-  subscription: {
-    plan: {
+const userSchema = new mongoose.Schema(
+  {
+    name: {
       type: String,
-      default: 'free'
+      trim: true,
+      default: ''
     },
-    status: {
+    email: {
       type: String,
-      default: 'free'
+      required: true,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      index: true
     },
-    premium: {
-      type: Boolean,
-      default: false
+    password: {
+      type: String,
+      required: true,
+      minlength: 8,
+      select: false
     },
-    startDate: {
+    role: {
+      type: String,
+      enum: USER_ROLES,
+      default: 'admin'
+    },
+    refreshToken: {
+      type: String,
+      default: null,
+      select: false
+    },
+    planType: {
+      type: String,
+      default: 'free',
+      index: true
+    },
+    planExpiry: {
       type: Date,
       default: null
     },
-    endDate: {
-      type: Date,
-      default: null
-    },
-    razorpayOrderId: {
-      type: String,
-      default: null
-    },
-    razorpayPaymentId: {
-      type: String,
-      default: null
-    },
-    razorpaySignature: {
-      type: String,
-      default: null
-    },
-    razorpaySubscriptionId: {
-      type: String,
-      default: null
-    },
-    payment: {
-      type: Object,
-      default: {}
+    subscription: {
+      plan: {
+        type: String,
+        default: 'free'
+      },
+      status: {
+        type: String,
+        default: 'free'
+      },
+      premium: {
+        type: Boolean,
+        default: false
+      },
+      startDate: {
+        type: Date,
+        default: null
+      },
+      endDate: {
+        type: Date,
+        default: null
+      },
+      razorpayOrderId: {
+        type: String,
+        default: null
+      },
+      razorpayPaymentId: {
+        type: String,
+        default: null
+      },
+      razorpaySignature: {
+        type: String,
+        default: null
+      },
+      razorpaySubscriptionId: {
+        type: String,
+        default: null
+      },
+      payment: {
+        type: Object,
+        default: {}
+      }
     }
+  },
+  {
+    timestamps: true
   }
-}, {
-  timestamps: true
-});
+);
 
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {

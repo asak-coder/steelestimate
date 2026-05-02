@@ -13,16 +13,16 @@ const {
 
 const { leadStatusSchema } = require("../validators/leadValidator");
 const { validate } = require("../middleware/validation");
-const auth = require("../middleware/auth");
+const { verifyToken, requireAdmin } = require("../middleware/auth");
 const { adminLimiter, sensitiveLimiter } = require("../middleware/rateLimiters");
 
 const router = express.Router();
 
 const requireRoles = (roles) => (req, res, next) => {
-  const role = req.user?.role;
+  const role = String(req.user?.role || "").toLowerCase();
 
-  if (!role || !roles.includes(role)) {
-    return res.status(403).json({ message: "Forbidden" });
+  if (!role || !roles.map((item) => String(item).toLowerCase()).includes(role)) {
+    return res.status(403).json({ success: false, message: "Forbidden" });
   }
 
   return next();
@@ -31,14 +31,14 @@ const requireRoles = (roles) => (req, res, next) => {
 router.post("/", sensitiveLimiter, createLead);
 router.post("/track-usage", trackCalculatorUsage);
 
-router.get("/admin/stats", auth, requireRoles(["ADMIN"]), adminLimiter, getAdminStats);
-router.get("/dashboard", auth, sensitiveLimiter, getDashboard);
-router.get("/history", auth, sensitiveLimiter, getHistory);
-router.get("/", auth, sensitiveLimiter, getLeads);
-router.get("/:id", auth, sensitiveLimiter, getLeadById);
+router.get("/admin/stats", verifyToken, requireAdmin, adminLimiter, getAdminStats);
+router.get("/dashboard", verifyToken, sensitiveLimiter, getDashboard);
+router.get("/history", verifyToken, sensitiveLimiter, getHistory);
+router.get("/", verifyToken, sensitiveLimiter, getLeads);
+router.get("/:id", verifyToken, sensitiveLimiter, getLeadById);
 
-router.patch("/:id", auth, requireRoles(["ADMIN", "MANAGER"]), sensitiveLimiter, validate(leadStatusSchema), updateLeadStatus);
-router.put("/:id", auth, requireRoles(["ADMIN", "MANAGER"]), sensitiveLimiter, validate(leadStatusSchema), updateLeadStatus);
-router.post("/:id/score", auth, requireRoles(["ADMIN", "MANAGER"]), sensitiveLimiter, updateLeadScoring);
+router.patch("/:id", verifyToken, requireRoles(["admin", "manager"]), sensitiveLimiter, validate(leadStatusSchema), updateLeadStatus);
+router.put("/:id", verifyToken, requireRoles(["admin", "manager"]), sensitiveLimiter, validate(leadStatusSchema), updateLeadStatus);
+router.post("/:id/score", verifyToken, requireRoles(["admin", "manager"]), sensitiveLimiter, updateLeadScoring);
 
 module.exports = router;
