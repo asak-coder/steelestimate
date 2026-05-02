@@ -20,6 +20,26 @@ const authLimiter = rateLimit({
   }
 });
 
+const globalLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later'
+  }
+});
+
+const loginLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: {
+    success: false,
+    message: 'Too many login attempts, please try again later'
+  }
+});
+
 const adminLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000,
@@ -51,6 +71,8 @@ const pebCalcLimiter = rateLimit({
 });
 
 module.exports = {
+  globalLimiter,
+  loginLimiter,
   authLimiter,
   adminLimiter,
   sensitiveLimiter,

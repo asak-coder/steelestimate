@@ -1,26 +1,5 @@
-const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:5000';
-
-const normalizeBaseUrl = (baseUrl) => {
-  if (!baseUrl) return '';
-  return String(baseUrl).replace(/\/+$/, '');
-};
-
-const API_BASE_URL = normalizeBaseUrl(DEFAULT_API_URL);
-
-const joinUrl = (path) => {
-  const cleanPath = String(path || '').startsWith('/') ? String(path) : `/${path}`;
-
-  if (!API_BASE_URL) {
-    return cleanPath;
-  }
-
-  const baseEndsWithApi = /\/api$/i.test(API_BASE_URL);
-  if (baseEndsWithApi && cleanPath.startsWith('/api/')) {
-    return `${API_BASE_URL}${cleanPath.slice(4)}`;
-  }
-
-  return `${API_BASE_URL}${cleanPath}`;
-};
+import apiClient from './apiClient';
+import { clearAuthSession, setAuthSession } from './authStore';
 
 const createRequestError = (message, status, data) => {
   const error = new Error(message || 'Request failed');
@@ -30,22 +9,12 @@ const createRequestError = (message, status, data) => {
   return error;
 };
 
-const notifyAuthChange = (detail) => {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.dispatchEvent(new CustomEvent('steelestimate-auth-change', { detail }));
-  } catch (_) {
-    window.dispatchEvent(new Event('steelestimate-auth-change'));
-  }
-};
-
 const redirectForAuthError = () => {
   if (typeof window === 'undefined') return;
 
-  const loginPath = '/login';
+  const loginPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
   if (window.location.pathname !== loginPath) {
-    window.location.assign(`${loginPath}?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+    window.location.assign(`${loginPath}?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
   }
 };
 
@@ -67,58 +36,39 @@ export async function request(path, options = {}) {
     }
   }
 
-  const response = await fetch(joinUrl(path), {
-    credentials: 'include',
-    ...fetchOptions,
-    headers,
-    body:
-      body === undefined || body === null
-        ? undefined
-        : isFormData || typeof body === 'string'
-          ? body
-          : JSON.stringify(body),
-  });
+  try {
+    const response = await apiClient.request({
+      url: path,
+      method: fetchOptions.method || 'GET',
+      headers,
+      data:
+        body === undefined || body === null
+          ? undefined
+          : isFormData || typeof body === 'string'
+            ? body
+            : body,
+      responseType: responseType === 'arrayBuffer' ? 'arraybuffer' : responseType,
+      skipAuthRefresh: redirectOnAuthError === false && path.includes('/api/auth/')
+    });
 
-  let data = null;
-
-  if (responseType === 'blob') {
-    data = await response.blob();
-  } else if (responseType === 'arrayBuffer') {
-    data = await response.arrayBuffer();
-  } else {
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      try {
-        data = await response.json();
-      } catch (_) {
-        data = null;
-      }
-    } else {
-      try {
-        const text = await response.text();
-        data = text ? { message: text } : null;
-      } catch (_) {
-        data = null;
-      }
-    }
-  }
-
-  if (!response.ok) {
+    return response.data;
+  } catch (error) {
+    const status = error?.response?.status || error.status || 500;
+    const data = error?.response?.data || error.data || null;
     const message =
       data?.message ||
       data?.error ||
       data?.msg ||
-      `Request failed with status ${response.status}`;
+      error?.message ||
+      `Request failed with status ${status}`;
 
-    if (response.status === 401 && redirectOnAuthError) {
-      notifyAuthChange({ type: 'unauthorized' });
+    if ((status === 401 || status === 403) && redirectOnAuthError) {
+      clearAuthSession();
       redirectForAuthError();
     }
 
-    throw createRequestError(message, response.status, data);
+    throw createRequestError(message, status, data);
   }
-
-  return data;
 }
 
 const unwrapData = (payload) => {
@@ -131,11 +81,29 @@ const unwrapData = (payload) => {
 };
 
 export async function login(payload) {
-  return request('/api/auth/login', {
+  const response = await request('/api/auth/login', {
     method: 'POST',
     body: payload,
     redirectOnAuthError: false,
   });
+  const data = response?.data || response || {};
+  if (data.accessToken) {
+    setAuthSession(data.accessToken, data.user || null);
+  }
+  return response;
+}
+
+export async function verifyLogin2FA(payload) {
+  const response = await request('/api/auth/2fa/login', {
+    method: 'POST',
+    body: payload,
+    redirectOnAuthError: false,
+  });
+  const data = response?.data || response || {};
+  if (data.accessToken) {
+    setAuthSession(data.accessToken, data.user || null);
+  }
+  return response;
 }
 
 export async function register(payload) {
@@ -147,10 +115,12 @@ export async function register(payload) {
 }
 
 export async function logout() {
-  return request('/api/auth/logout', {
+  const response = await request('/api/auth/logout', {
     method: 'POST',
     redirectOnAuthError: false,
   });
+  clearAuthSession();
+  return response;
 }
 
 export async function getMe() {
@@ -159,6 +129,46 @@ export async function getMe() {
     return data.user || data.data || data.result || data;
   }
   return data;
+}
+
+export async function refreshSession() {
+  const response = await request('/api/auth/refresh', {
+    method: 'POST',
+    redirectOnAuthError: false,
+  });
+  const data = response?.data || response || {};
+  if (data.accessToken) {
+    setAuthSession(data.accessToken, data.user || null);
+  }
+  return response;
+}
+
+export async function getSessions() {
+  return unwrapData(await request('/api/auth/sessions', { method: 'GET' }));
+}
+
+export async function revokeSession(token) {
+  return request(`/api/auth/sessions/${encodeURIComponent(token)}`, { method: 'DELETE' });
+}
+
+export async function getLoginLogs() {
+  return unwrapData(await request('/api/auth/login-logs', { method: 'GET' }));
+}
+
+export async function getSecurityEvents() {
+  return unwrapData(await request('/api/auth/security-events', { method: 'GET' }));
+}
+
+export async function setup2FA() {
+  return unwrapData(await request('/api/auth/2fa/setup', { method: 'POST' }));
+}
+
+export async function enable2FA(payload) {
+  return unwrapData(await request('/api/auth/2fa/verify', { method: 'POST', body: payload }));
+}
+
+export async function disable2FA(payload) {
+  return unwrapData(await request('/api/auth/2fa/disable', { method: 'POST', body: payload }));
 }
 
 export async function updateProfile(payload) {
@@ -551,9 +561,18 @@ export async function deleteEstimate(id) {
 const api = {
   request,
   login,
+  verifyLogin2FA,
   register,
   logout,
   getMe,
+  refreshSession,
+  getSessions,
+  revokeSession,
+  getLoginLogs,
+  getSecurityEvents,
+  setup2FA,
+  enable2FA,
+  disable2FA,
   updateProfile,
   trackCalculatorUsage,
   getPlans,

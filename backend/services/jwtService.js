@@ -16,10 +16,11 @@ const refreshTokenOptions = {
   audience
 };
 
-const buildPayload = (user) => ({
+const buildPayload = (user, extra = {}) => ({
   id: String(user._id || user.id),
   email: user.email,
-  role: user.role
+  role: user.role,
+  ...extra
 });
 
 const signAccessToken = (user) =>
@@ -28,8 +29,8 @@ const signAccessToken = (user) =>
     subject: String(user._id || user.id)
   });
 
-const signRefreshToken = (user) =>
-  jwt.sign(buildPayload(user), env.JWT_REFRESH_SECRET, {
+const signRefreshToken = (user, extra = {}) =>
+  jwt.sign(buildPayload(user, extra), env.JWT_REFRESH_SECRET, {
     ...refreshTokenOptions,
     subject: String(user._id || user.id)
   });

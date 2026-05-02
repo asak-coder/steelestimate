@@ -34,6 +34,78 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false
     },
+    sessions: {
+      type: [
+        {
+          token: {
+            type: String,
+            required: true,
+            select: false
+          },
+          createdAt: {
+            type: Date,
+            default: Date.now
+          },
+          userAgent: {
+            type: String,
+            default: ''
+          },
+          ip: {
+            type: String,
+            default: ''
+          },
+          lastUsed: {
+            type: Date,
+            default: Date.now
+          }
+        }
+      ],
+      default: [],
+      select: false
+    },
+    loginLogs: {
+      type: [
+        {
+          ip: {
+            type: String,
+            default: ''
+          },
+          userAgent: {
+            type: String,
+            default: ''
+          },
+          status: {
+            type: String,
+            enum: ['SUCCESS', 'FAILED'],
+            required: true
+          },
+          timestamp: {
+            type: Date,
+            default: Date.now
+          }
+        }
+      ],
+      default: []
+    },
+    security: {
+      failedAttempts: {
+        type: Number,
+        default: 0
+      },
+      lockUntil: {
+        type: Date,
+        default: null
+      }
+    },
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false
+    },
+    twoFactorSecret: {
+      type: String,
+      default: null,
+      select: false
+    },
     planType: {
       type: String,
       default: 'free',
@@ -115,6 +187,7 @@ userSchema.methods.toSafeObject = function () {
     name: this.name,
     email: this.email,
     role: this.role,
+    twoFactorEnabled: Boolean(this.twoFactorEnabled),
     createdAt: this.createdAt,
     updatedAt: this.updatedAt
   };

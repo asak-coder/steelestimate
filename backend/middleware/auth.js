@@ -25,6 +25,8 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+const requireAuth = verifyToken;
+
 const requireAdmin = (req, res, next) => {
   if (!req.user) {
     return sendAuthError(res, 'Authentication required', 401);
@@ -39,5 +41,6 @@ const requireAdmin = (req, res, next) => {
 
 module.exports = {
   verifyToken,
+  requireAuth,
   requireAdmin
 };

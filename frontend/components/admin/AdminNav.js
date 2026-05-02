@@ -8,6 +8,8 @@ const navItems = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/leads", label: "Leads" },
   { href: "/admin/subscriptions", label: "Subscriptions" },
+  { href: "/admin/sessions", label: "Sessions" },
+  { href: "/admin/security", label: "Security" },
 ];
 
 export default function AdminNav() {
