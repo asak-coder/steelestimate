@@ -21,6 +21,7 @@ const {
   recordLoginLog
 } = require('../utils/securityAnalytics');
 const { env } = require('../config/env');
+const { enrichIp } = require('../services/geoIpService');
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -194,6 +195,7 @@ const buildRefreshSession = ({ user, meta }) => {
       ip: meta.ip,
       userAgent: meta.userAgent,
       deviceHash: meta.deviceHash,
+      geo: meta.geo || undefined,
       createdAt: new Date(),
       lastUsedAt: new Date(),
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS)
@@ -221,11 +223,13 @@ const findUserForAuth = (email) =>
 
 const completeLogin = async ({ user, req, res, status = 'SUCCESS' }) => {
   const meta = getRequestMeta(req);
+  meta.geo = await enrichIp(meta.ip);
   await detectSuccessfulLoginAnomalies({
     userId: user._id,
     ip: meta.ip,
     userAgent: meta.userAgent,
-    deviceHash: meta.deviceHash
+    deviceHash: meta.deviceHash,
+    geo: meta.geo
   });
   const tokens = await createSessionTokens({ user, meta });
 
@@ -245,7 +249,8 @@ const completeLogin = async ({ user, req, res, status = 'SUCCESS' }) => {
     email: user.email,
     ip: meta.ip,
     userAgent: meta.userAgent,
-    status
+    status,
+    geo: meta.geo
   });
 
   sendRefreshCookie(res, tokens.refreshToken);
@@ -257,6 +262,7 @@ const completeLogin = async ({ user, req, res, status = 'SUCCESS' }) => {
 };
 
 const recordFailedLogin = async ({ user, email, meta, reason = 'INVALID_CREDENTIALS' }) => {
+  meta.geo = meta.geo || (await enrichIp(meta.ip));
   let lockUntil = null;
 
   if (user) {
@@ -281,7 +287,8 @@ const recordFailedLogin = async ({ user, email, meta, reason = 'INVALID_CREDENTI
     ip: meta.ip,
     userAgent: meta.userAgent,
     status: lockUntil ? 'LOCKED' : 'FAILED',
-    reason
+    reason,
+    geo: meta.geo
   });
   await detectFailedLoginBurst({
     userId: user?._id || null,
@@ -308,6 +315,7 @@ const recordFailedLogin = async ({ user, email, meta, reason = 'INVALID_CREDENTI
 };
 
 const recordTwoFactorFailure = async ({ user, meta }) => {
+  meta.geo = meta.geo || (await enrichIp(meta.ip));
   const counterState = await incrementCounterKeys(twoFactorKeysFor({ userId: String(user._id), ip: meta.ip }));
   let lockUntil = counterState.lockUntil;
 
@@ -338,7 +346,8 @@ const recordTwoFactorFailure = async ({ user, meta }) => {
     ip: meta.ip,
     userAgent: meta.userAgent,
     status: '2FA_FAILED',
-    reason: lockUntil ? '2FA_LOCKED' : 'INVALID_OTP'
+    reason: lockUntil ? '2FA_LOCKED' : 'INVALID_OTP',
+    geo: meta.geo
   });
 };
 
@@ -535,6 +544,7 @@ const refreshToken = async (req, res, next) => {
       throw new AppError('Invalid refresh token', 401);
     }
 
+    meta.geo = await enrichIp(meta.ip);
     const tokens = buildRefreshSession({ user, meta });
 
     await mongoSession.withTransaction(async () => {
@@ -692,11 +702,21 @@ const enable2FA = async (req, res, next) => {
 const disable2FA = async (req, res, next) => {
   try {
     const otp = String(req.body.otp || req.body.token || '').replace(/\s+/g, '');
+    const password = String(req.body.password || '');
     const meta = getRequestMeta(req);
-    const user = await User.findById(req.user.id).select('+twoFactorSecret');
+    const user = await User.findById(req.user.id).select('+twoFactorSecret +password');
 
     if (!user || user.disabledAt || !user.twoFactorEnabled || !user.twoFactorSecret) {
       throw new AppError('Two-factor authentication is not enabled', 400);
+    }
+
+    if (!password) {
+      throw new AppError('Password is required to disable two-factor authentication', 400);
+    }
+
+    const passwordValid = await user.comparePassword(password);
+    if (!passwordValid) {
+      throw new AppError('Invalid password', 401);
     }
 
     const verified = speakeasy.totp.verify({

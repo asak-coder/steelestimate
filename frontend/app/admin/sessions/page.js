@@ -24,6 +24,10 @@ function deviceName(userAgent = '') {
   return 'Browser session';
 }
 
+function isSuspicious(session) {
+  return Boolean(session.geo?.country && session.geo.country !== 'IN');
+}
+
 export default function AdminSessionsPage() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +90,22 @@ export default function AdminSessionsPage() {
           ) : (
             <div className="divide-y divide-slate-200">
               {sessions.map((session) => (
-                <div key={session.refreshTokenId} className="grid gap-4 px-5 py-4 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-center">
+                <div key={session.refreshTokenId} className={`grid gap-4 px-5 py-4 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-center ${isSuspicious(session) ? 'bg-amber-50' : ''}`}>
                   <div>
-                    <p className="font-medium text-slate-900">{deviceName(session.userAgent)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-slate-900">{deviceName(session.userAgent)}</p>
+                      {isSuspicious(session) ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                          Review
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="mt-1 break-all text-xs text-slate-500">{session.userAgent || 'No user agent captured'}</p>
+                    {session.geo?.city || session.geo?.country ? (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {[session.geo.city, session.geo.region, session.geo.country].filter(Boolean).join(', ')}
+                      </p>
+                    ) : null}
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">IP</p>

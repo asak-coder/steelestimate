@@ -170,6 +170,22 @@ export async function getSecurityEvents(params = {}) {
   return unwrapData(await request(`/api/auth/security-events${buildQuery(params)}`, { method: 'GET' }));
 }
 
+export async function getAdminSecurityEvents(params = {}) {
+  return unwrapData(await request(`/api/admin/security/events${buildQuery(params)}`, { method: 'GET' }));
+}
+
+export async function getAdminSecurityLogins(params = {}) {
+  return unwrapData(await request(`/api/admin/security/logins${buildQuery(params)}`, { method: 'GET' }));
+}
+
+export async function getAdminSecuritySummary(params = {}) {
+  return unwrapData(await request(`/api/admin/security/summary${buildQuery(params)}`, { method: 'GET' }));
+}
+
+export async function getAdminSecurityLive() {
+  return unwrapData(await request('/api/admin/security/live', { method: 'GET' }));
+}
+
 export async function setup2FA() {
   return unwrapData(await request('/api/auth/2fa/setup', { method: 'POST' }));
 }
@@ -581,6 +597,10 @@ const api = {
   revokeSession,
   getLoginLogs,
   getSecurityEvents,
+  getAdminSecurityEvents,
+  getAdminSecurityLogins,
+  getAdminSecuritySummary,
+  getAdminSecurityLive,
   setup2FA,
   enable2FA,
   disable2FA,

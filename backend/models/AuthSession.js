@@ -34,6 +34,15 @@ const authSessionSchema = new mongoose.Schema(
       default: '',
       index: true
     },
+    geo: {
+      country: { type: String, default: '' },
+      region: { type: String, default: '' },
+      city: { type: String, default: '' },
+      isp: { type: String, default: '' },
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      source: { type: String, default: '' }
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -68,5 +77,6 @@ authSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_au
 authSessionSchema.index({ userId: 1, revokedAt: 1, expiresAt: 1 }, { name: 'idx_auth_sessions_user_active' });
 authSessionSchema.index({ userId: 1, lastUsedAt: -1 }, { name: 'idx_auth_sessions_user_last_used' });
 authSessionSchema.index({ ip: 1, createdAt: -1 }, { name: 'idx_auth_sessions_ip_created' });
+authSessionSchema.index({ userId: 1, 'geo.country': 1, createdAt: -1 }, { name: 'idx_auth_sessions_user_country' });
 
 module.exports = mongoose.models.AuthSession || mongoose.model('AuthSession', authSessionSchema);

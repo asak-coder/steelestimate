@@ -10,6 +10,7 @@ const navItems = [
   { href: "/admin/subscriptions", label: "Subscriptions" },
   { href: "/admin/sessions", label: "Sessions" },
   { href: "/admin/security", label: "Security" },
+  { href: "/admin/security/2fa", label: "2FA" },
 ];
 
 export default function AdminNav() {

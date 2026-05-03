@@ -10,7 +10,12 @@ const env = {
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || '',
   JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-  CLIENT_URL: process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000'
+  CLIENT_URL: process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000',
+  IPINFO_TOKEN: process.env.IPINFO_TOKEN || '',
+  CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN || '',
+  CLOUDFLARE_ZONE_ID: process.env.CLOUDFLARE_ZONE_ID || '',
+  CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID || '',
+  CLOUDFLARE_AUTO_CONFIGURE: process.env.CLOUDFLARE_AUTO_CONFIGURE === 'true'
 };
 
 const validateEnv = () => {

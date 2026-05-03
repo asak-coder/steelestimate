@@ -27,6 +27,7 @@ const compactSession = (session) => ({
   ip: session.ip,
   userAgent: session.userAgent,
   deviceHash: session.deviceHash,
+  geo: session.geo,
   createdAt: session.createdAt,
   lastUsedAt: session.lastUsedAt,
   expiresAt: session.expiresAt,

@@ -36,6 +36,15 @@ const loginLogSchema = new mongoose.Schema(
       type: String,
       default: null
     },
+    geo: {
+      country: { type: String, default: '' },
+      region: { type: String, default: '' },
+      city: { type: String, default: '' },
+      isp: { type: String, default: '' },
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      source: { type: String, default: '' }
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -53,6 +62,7 @@ loginLogSchema.index({ email: 1, createdAt: -1 }, { name: 'idx_login_logs_email_
 loginLogSchema.index({ ip: 1, createdAt: -1 }, { name: 'idx_login_logs_ip_recent' });
 loginLogSchema.index({ status: 1, createdAt: -1 }, { name: 'idx_login_logs_status_recent' });
 loginLogSchema.index({ userId: 1, status: 1, createdAt: -1 }, { name: 'idx_login_logs_user_status_recent' });
+loginLogSchema.index({ userId: 1, 'geo.country': 1, createdAt: -1 }, { name: 'idx_login_logs_user_country_recent' });
 
 loginLogSchema.statics.STATUSES = LOGIN_STATUSES;
 

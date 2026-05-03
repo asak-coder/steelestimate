@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
@@ -15,10 +16,14 @@ const adminRoutes = require('./routes/adminRoutes');
 const estimateRoutes = require('./routes/v1/estimateRoutes');
 const aiEstimateRoutes = require('./routes/v1/aiEstimateRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { initSecurityRealtime } = require('./services/securityRealtime');
+const { configureCloudflareSecurity } = require('./services/cloudflareService');
 
 validateEnv();
 
 const app = express();
+const httpServer = http.createServer(app);
+initSecurityRealtime(httpServer);
 
 app.set('trust proxy', 1);
 
@@ -66,7 +71,9 @@ app.use(errorHandler);
       await mongoose.connect(env.MONGO_URI);
     }
 
-    app.listen(PORT, '0.0.0.0');
+    await configureCloudflareSecurity();
+
+    httpServer.listen(PORT, '0.0.0.0');
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Startup Error:', err);
